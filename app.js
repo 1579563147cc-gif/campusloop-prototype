@@ -2,7 +2,8 @@ const state = {
   activePage: 'overview',
   filter: 'all',
   search: '',
-  role: localStorage.getItem('campusloop-role') || 'operator',
+  user: null,
+  token: sessionStorage.getItem('campusloop-token') || '',
   offlineMode: false,
   queuedRequests: JSON.parse(localStorage.getItem('campusloop-offline-queue') || '[]'),
   apiOnline: false,
@@ -16,6 +17,8 @@ const modalRoot = document.getElementById('modal-root');
 const toast = document.getElementById('toast');
 const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:4173' : '';
 let toastTimer;
+const roleLabels = { student: '学生用户', operator: '设施运营', sustainability: '可持续管理员', admin: '系统管理员' };
+const roleDescriptions = { student: 'Student user', operator: 'Campus operator', sustainability: 'Sustainability admin', admin: 'System administrator' };
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
@@ -56,11 +59,59 @@ function queueOfflineRequest(path, options) {
 
 async function apiRequest(path, options = {}) {
   const requestOptions = { headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }, ...options };
+  if (state.token) requestOptions.headers.Authorization = `Bearer ${state.token}`;
   if (state.offlineMode && requestOptions.method && requestOptions.method !== 'GET') return queueOfflineRequest(path, requestOptions);
   const response = await fetch(`${API_BASE}${path}`, requestOptions);
   const payload = await response.json().catch(() => ({}));
+  if (response.status === 401 && path !== '/api/auth/login') { showLogin(); throw new Error('登录已失效，请重新登录'); }
   if (!response.ok) throw new Error(payload.error?.message || `请求失败（${response.status}）`);
   return payload;
+}
+
+function showLogin(message = '') {
+  state.user = null; state.apiOnline = false;
+  document.getElementById('app-shell').classList.add('hidden');
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('login-error').textContent = message;
+  setServerStatus('offline', '请先登录');
+}
+
+function showApp(user) {
+  state.user = user; state.apiOnline = true;
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app-shell').classList.remove('hidden');
+  document.getElementById('current-role').textContent = roleLabels[user.role] || user.role;
+  document.getElementById('profile-name').textContent = user.displayName;
+  document.getElementById('profile-role').textContent = roleDescriptions[user.role] || user.role;
+  document.getElementById('profile-avatar').textContent = user.initials;
+  applyRoleVisibility();
+}
+
+function applyRoleVisibility() {
+  const role = state.user?.role;
+  document.querySelectorAll('[data-roles]').forEach(el => {
+    const allowed = el.dataset.roles.split(',');
+    el.classList.toggle('role-hidden', !allowed.includes(role));
+  });
+  document.querySelectorAll('.nav-item[data-page]').forEach(item => {
+    const page = item.dataset.page;
+    const allowed = { overview: ['student','operator','sustainability','admin'], exchange: ['student','operator','sustainability','admin'], operations: ['operator','admin'], impact: ['operator','sustainability','admin'], governance: ['operator','sustainability','admin'], implementation: ['operator','sustainability','admin'], evidence: ['student','operator','sustainability','admin'] }[page] || [];
+    item.classList.toggle('role-hidden', !allowed.includes(role));
+  });
+}
+
+async function login(username, password) {
+  const response = await fetch(`${API_BASE}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error?.message || '登录失败');
+  state.token = payload.token; sessionStorage.setItem('campusloop-token', state.token); showApp(payload.user); await loadAuthenticatedData();
+}
+
+async function loadAuthenticatedData() {
+  setServerStatus('loading', '加载工作空间…');
+  await Promise.all([loadItems(), loadWorkOrders(), loadRisks(), loadModerationQueue()]);
+  setServerStatus('online', '已登录 · 后端已连接');
+  persistOfflineQueue();
 }
 
 async function loadItems() {
@@ -79,24 +130,37 @@ async function loadWorkOrders() {
 }
 
 async function loadRisks() {
+  if (state.user?.role === 'student') { state.risks = []; renderRisks(); return; }
   const payload = await apiRequest('/api/risks');
   state.risks = payload.risks || [];
   renderRisks();
 }
 
+async function loadModerationQueue() {
+  if (!['operator', 'admin'].includes(state.user?.role)) return;
+  const payload = await apiRequest('/api/moderation/queue');
+  renderModerationQueue(payload.items || []);
+}
+
+function renderModerationQueue(items) {
+  const list = document.getElementById('moderation-list');
+  const count = document.getElementById('moderation-count');
+  if (!list || !count) return;
+  count.textContent = `${items.length} 项`;
+  if (!items.length) { list.innerHTML = '<p class="empty-inline">当前没有待人工审核资源。</p>'; return; }
+  list.innerHTML = items.map(item => `<div class="moderation-row"><div><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.category)} · ${escapeHtml(item.location)} · ${escapeHtml(item.id)}</span></div><div class="moderation-actions"><button class="button small secondary" data-review-item="${escapeHtml(item.id)}" data-review-status="rejected">驳回</button><button class="button small primary" data-review-item="${escapeHtml(item.id)}" data-review-status="approved">通过</button></div></div>`).join('');
+}
+
 async function bootstrap() {
-  setServerStatus('loading', '连接后端中…');
   try {
-    await apiRequest('/api/health');
-    state.apiOnline = true;
-    setServerStatus('online', '后端已连接 · 模拟数据');
-    await Promise.all([loadItems(), loadWorkOrders(), loadRisks()]);
-    persistOfflineQueue();
+    await fetch(`${API_BASE}/api/health`);
+    if (!state.token) { showLogin(); return; }
+    const payload = await apiRequest('/api/auth/me');
+    showApp(payload.user);
+    await loadAuthenticatedData();
   } catch (error) {
-    state.apiOnline = false;
-    setServerStatus('offline', '后端未连接');
-    showToast('请先运行 node server.js，再打开页面', 'error');
-    renderItems(); renderKanban(); renderRisks();
+    sessionStorage.removeItem('campusloop-token'); state.token = '';
+    showLogin(error.message === 'Failed to fetch' ? '后端未启动，请先运行 node server.js' : '请登录后继续');
   }
 }
 
@@ -108,6 +172,11 @@ function requireApi() {
   return true;
 }
 
+function requireRole(roles) {
+  if (!state.user || !roles.includes(state.user.role)) { showToast('当前账户没有执行此操作的权限', 'error'); return false; }
+  return true;
+}
+
 function handleApiError(error) {
   state.apiOnline = false;
   setServerStatus('offline', '后端连接异常');
@@ -116,6 +185,8 @@ function handleApiError(error) {
 
 function goToPage(page) {
   if (!pageLabels[page]) return;
+  const allowed = { overview: ['student','operator','sustainability','admin'], exchange: ['student','operator','sustainability','admin'], operations: ['operator','admin'], impact: ['operator','sustainability','admin'], governance: ['operator','sustainability','admin'], implementation: ['operator','sustainability','admin'], evidence: ['student','operator','sustainability','admin'] }[page] || [];
+  if (state.user && !allowed.includes(state.user.role)) { showToast('当前账户无法访问这个工作区', 'error'); return; }
   state.activePage = page;
   document.querySelectorAll('.page').forEach(section => section.classList.toggle('active', section.id === `page-${page}`));
   document.querySelectorAll('.nav-item[data-page]').forEach(item => item.classList.toggle('active', item.dataset.page === page));
@@ -123,7 +194,7 @@ function goToPage(page) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (page === 'exchange') loadItems().catch(handleApiError);
   if (page === 'operations') loadWorkOrders().catch(handleApiError);
-  if (page === 'governance') loadRisks().catch(handleApiError);
+  if (page === 'governance') { loadRisks().catch(handleApiError); loadModerationQueue().catch(handleApiError); }
 }
 
 function itemVisual(item) {
@@ -196,7 +267,7 @@ function openItemModal(id) {
   const lifecycle = item.history || [{ label: '已发布', at: item.posted }, { label: item.status, at: '当前状态' }];
   const timeline = lifecycle.map((step, index) => `<div class="timeline-step ${index === lifecycle.length - 1 ? 'current' : 'complete'}"><span class="timeline-dot"></span><div><strong>${escapeHtml(step.label)}</strong><small>${escapeHtml(step.at || '')}</small></div></div>`).join('');
   openModal(`<div class="modal-head"><div><p class="panel-kicker">RESOURCE DETAIL · ${escapeHtml(item.id)}</p><h2>资源详情</h2></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="detail-hero"><span class="item-emoji">${itemEmoji(item)}</span><div class="detail-meta"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.category)} · ${escapeHtml(item.status)}</span></div></div><div class="detail-list"><div><span>领取地点</span><span>${escapeHtml(item.location)}</span></div><div><span>发布者</span><span>${escapeHtml(item.owner)}</span></div><div><span>循环价值</span><span class="green-text">${escapeHtml(item.impact)}</span></div><div><span>更新时间</span><span>${escapeHtml(item.posted)}</span></div></div><div class="timeline"><p class="panel-kicker">LIFECYCLE AUDIT</p>${timeline}</div><div class="modal-actions"><button class="button secondary" data-close-modal="true">关闭</button><button class="button primary" id="claim-item">${item.statusKey === 'available' ? '预约领取' : '关注状态'} <span>→</span></button></div>`);
-  document.getElementById('claim-item').addEventListener('click', async () => { if (item.statusKey !== 'available') { closeModal(); showToast('已加入状态提醒'); return; } if (!requireApi()) return; try { await apiRequest(`/api/items/${encodeURIComponent(item.id)}`, { method: 'PATCH', body: JSON.stringify({ status: '已预约', statusKey: 'donation' }) }); closeModal(); await loadItems(); showToast(`已预约“${item.name}”，请在领取时间内完成扫码`); } catch (error) { handleApiError(error); } });
+  document.getElementById('claim-item').addEventListener('click', async () => { if (item.statusKey !== 'available') { closeModal(); showToast('已加入状态提醒'); return; } if (!requireApi()) return; try { await apiRequest(`/api/items/${encodeURIComponent(item.id)}`, { method: 'PATCH', body: JSON.stringify({ action: 'claim' }) }); closeModal(); await loadItems(); showToast(`已预约“${item.name}”，请在领取时间内完成扫码`); } catch (error) { handleApiError(error); } });
 }
 
 function openWorkOrderModal() {
@@ -208,8 +279,9 @@ function openOrderModal(id) {
   const order = state.workOrders.find(entry => entry.id === id); if (!order) return;
   const nextStatus = { new: 'progress', progress: 'pickup', pickup: 'done', done: 'done' }[order.status]; const nextLabel = { new: '开始处理', progress: '标记待清运', pickup: '完成工单', done: '已完成' }[order.status]; const statusLabel = { new: '待处理', progress: '处理中', pickup: '待清运', done: '已完成' }[order.status];
   const history = (order.history || [{ label: statusLabel, at: order.due }]).map(step => `<div class="timeline-step complete"><span class="timeline-dot"></span><div><strong>${escapeHtml(step.label)}</strong><small>${escapeHtml(step.at || '')}</small></div></div>`).join('');
-  openModal(`<div class="modal-head"><div><p class="panel-kicker">WORK ORDER · ${escapeHtml(order.id)}</p><h2>${escapeHtml(order.title)}</h2><p>${escapeHtml(order.area)} · ${escapeHtml(order.type)}</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="detail-list"><div><span>当前状态</span><span>${statusLabel}</span></div><div><span>截止时间</span><span>${escapeHtml(order.due)}</span></div><div><span>数量</span><span>${escapeHtml(order.quantity || 1)}</span></div><div><span>优先级</span><span>${escapeHtml(order.priority)}</span></div><div><span>负责人</span><span>${escapeHtml(order.person)} · Facilities</span></div><div><span>处理说明</span><span>${escapeHtml(order.description || '暂无说明')}</span></div></div><div class="timeline"><p class="panel-kicker">WORK ORDER AUDIT</p>${history}</div><div class="modal-actions"><button class="button secondary" data-close-modal="true">关闭</button><button class="button primary" id="advance-order" ${order.status === 'done' ? 'disabled' : ''}>${nextLabel} <span>→</span></button></div>`);
-  const advance = document.getElementById('advance-order'); if (advance && order.status !== 'done') advance.addEventListener('click', async () => { if (!requireApi()) return; try { await apiRequest(`/api/work-orders/${encodeURIComponent(order.id)}`, { method: 'PATCH', body: JSON.stringify({ status: nextStatus }) }); closeModal(); await loadWorkOrders(); showToast(`${order.id} 已更新，状态进入下一阶段`); } catch (error) { handleApiError(error); } });
+  const assignment = ['operator','admin'].includes(state.user?.role) ? `<div class="form-field inline-assignee"><label for="order-assignee">负责人</label><select id="order-assignee"><option value="LM" ${order.person === 'LM' ? 'selected' : ''}>Lin Mei</option><option value="JC" ${order.person === 'JC' ? 'selected' : ''}>Jordan Chen</option><option value="AK" ${order.person === 'AK' ? 'selected' : ''}>Ava Kim</option></select></div>` : `<div><span>负责人</span><span>${escapeHtml(order.person)} · Facilities</span></div>`;
+  openModal(`<div class="modal-head"><div><p class="panel-kicker">WORK ORDER · ${escapeHtml(order.id)}</p><h2>${escapeHtml(order.title)}</h2><p>${escapeHtml(order.area)} · ${escapeHtml(order.type)}</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="detail-list"><div><span>当前状态</span><span>${statusLabel}</span></div><div><span>截止时间</span><span>${escapeHtml(order.due)}</span></div><div><span>数量</span><span>${escapeHtml(order.quantity || 1)}</span></div><div><span>优先级</span><span>${escapeHtml(order.priority)}</span></div>${assignment}<div><span>处理说明</span><span>${escapeHtml(order.description || '暂无说明')}</span></div></div><div class="timeline"><p class="panel-kicker">WORK ORDER AUDIT</p>${history}</div><div class="modal-actions"><button class="button secondary" data-close-modal="true">关闭</button><button class="button primary" id="advance-order" ${order.status === 'done' ? 'disabled' : ''}>${nextLabel} <span>→</span></button></div>`);
+  const advance = document.getElementById('advance-order'); if (advance && order.status !== 'done') advance.addEventListener('click', async () => { if (!requireApi()) return; const assignee = document.getElementById('order-assignee')?.value; try { await apiRequest(`/api/work-orders/${encodeURIComponent(order.id)}`, { method: 'PATCH', body: JSON.stringify({ status: nextStatus, person: assignee }) }); closeModal(); await loadWorkOrders(); showToast(`${order.id} 已更新，状态进入下一阶段`); } catch (error) { handleApiError(error); } });
 }
 
 function openRiskModal() {
@@ -243,7 +315,7 @@ document.addEventListener('click', event => {
   const nav = event.target.closest('[data-page]'); if (nav) { goToPage(nav.dataset.page); return; }
   const jump = event.target.closest('[data-page-jump]'); if (jump) { goToPage(jump.dataset.pageJump); return; }
   const action = event.target.closest('[data-action]');
-  if (action) { if (action.dataset.action === 'open-add-item') openAddItemModal(); if (action.dataset.action === 'open-work-order') openWorkOrderModal(); if (action.dataset.action === 'open-risk') openRiskModal(); if (action.dataset.action === 'show-toast') showToast(action.dataset.toast || '已完成'); return; }
+  if (action) { if (action.dataset.action === 'open-add-item') openAddItemModal(); if (action.dataset.action === 'open-work-order' && requireRole(['operator','admin'])) openWorkOrderModal(); if (action.dataset.action === 'open-risk' && requireRole(['sustainability','admin'])) openRiskModal(); if (action.dataset.action === 'show-toast') showToast(action.dataset.toast || '已完成'); return; }
   const itemButton = event.target.closest('[data-item-id]'); if (itemButton && state.activePage === 'exchange') { openItemModal(itemButton.dataset.itemId); return; }
   const orderButton = event.target.closest('[data-order-id]'); if (orderButton) { openOrderModal(orderButton.dataset.orderId); return; }
   if (event.target.closest('[data-close-modal]')) closeModal();
@@ -254,8 +326,11 @@ document.getElementById('item-search').addEventListener('input', event => { stat
 document.getElementById('top-sync').addEventListener('click', syncQueue);
 document.getElementById('sync-sidebar').addEventListener('click', syncQueue);
 document.getElementById('offline-mode-button').addEventListener('click', toggleOfflineMode);
-document.getElementById('role-switcher').value = state.role;
-document.getElementById('role-switcher').addEventListener('change', event => { state.role = event.target.value; localStorage.setItem('campusloop-role', state.role); showToast(`当前演示角色：${event.target.options[event.target.selectedIndex].text}`); });
+document.getElementById('login-form').addEventListener('submit', async event => { event.preventDefault(); const form = new FormData(event.currentTarget); const error = document.getElementById('login-error'); error.textContent = ''; try { await login(form.get('username'), form.get('password')); } catch (err) { error.textContent = err.message; } });
+document.querySelectorAll('[data-demo-account]').forEach(button => button.addEventListener('click', () => { const credentials = { student: ['student', 'student123'], operator: ['operator', 'operator123'], sustainability: ['sustainability', 'sustain123'], admin: ['admin', 'admin123'] }[button.dataset.demoAccount]; document.getElementById('login-username').value = credentials[0]; document.getElementById('login-password').value = credentials[1]; }));
+document.getElementById('logout-button').addEventListener('click', async () => { try { await apiRequest('/api/auth/logout', { method: 'POST' }); } catch (_) {} sessionStorage.removeItem('campusloop-token'); state.token = ''; showLogin(); });
+document.addEventListener('click', async event => { const review = event.target.closest('[data-review-item]'); if (!review) return; if (!['operator','admin'].includes(state.user?.role)) return showToast('当前账户没有人工审核权限', 'error'); try { await apiRequest(`/api/items/${encodeURIComponent(review.dataset.reviewItem)}/review`, { method: 'PATCH', body: JSON.stringify({ decision: review.dataset.reviewStatus }) }); await Promise.all([loadItems(), loadModerationQueue()]); showToast(review.dataset.reviewStatus === 'approved' ? '资源已通过人工审核' : '资源已驳回'); } catch (error) { handleApiError(error); } });
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && modalRoot.getAttribute('aria-hidden') === 'false') closeModal(); });
 
 bootstrap();
+

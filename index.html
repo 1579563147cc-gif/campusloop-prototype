@@ -8,7 +8,16 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="app-shell">
+    <section class="login-screen" id="login-screen" aria-labelledby="login-title">
+      <div class="login-orbit orbit-a"></div><div class="login-orbit orbit-b"></div>
+      <div class="login-card">
+        <div class="brand-lockup login-brand"><div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M24 5c8.3 0 15.2 5.8 16.8 13.5"/><path d="M40.8 18.5l-7.3-.8 2.5-6.8"/><path d="M24 43c-8.3 0-15.2-5.8-16.8-13.5"/><path d="M7.2 29.5l7.3.8-2.5 6.8"/><path d="M39.8 24c0 8.7-7.1 15.8-15.8 15.8S8.2 32.7 8.2 24 15.3 8.2 24 8.2"/></svg></div><div><strong>CampusLoop</strong><span>CCRE · SWMIS</span></div></div>
+        <p class="login-kicker">CAMPUS OPERATIONS PORTAL</p><h1 id="login-title">登录你的工作空间</h1><p class="login-copy">使用角色账户进入资源审核、设施工单和治理后台。</p>
+        <form id="login-form" class="login-form"><label for="login-username">用户名</label><input id="login-username" name="username" autocomplete="username" required placeholder="例如 operator"/><label for="login-password">密码</label><input id="login-password" name="password" type="password" autocomplete="current-password" required placeholder="输入演示密码"/><button class="button primary login-submit" type="submit">登录 CampusLoop <span>→</span></button><p id="login-error" class="login-error" role="alert"></p></form>
+        <div class="demo-accounts"><p>演示账户</p><div><button type="button" data-demo-account="student">学生</button><button type="button" data-demo-account="operator">设施运营</button><button type="button" data-demo-account="sustainability">可持续管理员</button><button type="button" data-demo-account="admin">系统管理员</button></div></div>
+      </div>
+    </section>
+    <div class="app-shell hidden" id="app-shell">
       <aside class="sidebar" aria-label="主导航">
         <div class="brand-lockup">
           <div class="brand-mark" aria-hidden="true">
@@ -50,9 +59,9 @@
             <button class="mini-icon-button" id="sync-sidebar" aria-label="同步离线队列">↥</button>
           </div>
           <div class="profile-row">
-            <div class="avatar">LM</div>
-            <div><strong>Lin Mei</strong><span>Campus operator</span></div>
-            <button class="more-button" aria-label="更多选项">•••</button>
+            <div class="avatar" id="profile-avatar">LM</div>
+            <div><strong id="profile-name">Lin Mei</strong><span id="profile-role">Campus operator</span></div>
+            <button class="more-button" id="logout-button" aria-label="退出登录">↪</button>
           </div>
         </div>
       </aside>
@@ -62,7 +71,7 @@
           <div class="breadcrumb"><span>CampusLoop</span><span class="crumb-separator">/</span><strong id="breadcrumb-current">总览</strong></div>
           <div class="topbar-actions">
             <div class="server-status loading" id="server-status"><span class="status-dot"></span><span id="server-status-text">连接后端中…</span></div>
-            <select class="role-switcher" id="role-switcher" aria-label="切换演示角色"><option value="operator">设施运营</option><option value="student">学生用户</option><option value="sustainability">可持续管理员</option><option value="admin">系统管理员</option></select>
+            <div class="role-switcher-display" id="current-role">设施运营</div>
             <button class="topbar-button" id="offline-mode-button"><span>⌁</span> 模拟离线</button>
             <button class="topbar-button" id="top-sync"><span>↥</span> 同步 <b>3</b></button>
             <button class="topbar-button icon-only" data-action="show-toast" data-toast="暂无新通知" aria-label="通知">♢<span class="notification-dot"></span></button>
@@ -167,7 +176,7 @@
           <section class="page" id="page-operations" data-title="设施运营">
             <div class="page-heading heading-with-actions">
               <div><p class="eyebrow">FACILITIES OPERATIONS</p><h1>设施运营</h1><p class="page-subtitle">从发现问题到完成回收，每一个工单都有负责人。</p></div>
-              <div class="heading-actions"><button class="button secondary" data-action="show-toast" data-toast="路线视图将在下一版开放">路线视图 <span>↗</span></button><button class="button primary" data-action="open-work-order"><span>＋</span> 新建工单</button></div>
+              <div class="heading-actions"><button class="button secondary" data-action="show-toast" data-toast="路线视图将在下一版开放">路线视图 <span>↗</span></button><button class="button primary" data-action="open-work-order" data-roles="operator,admin"><span>＋</span> 新建工单</button></div>
             </div>
             <div class="metric-grid compact-metrics"><article class="metric-card light"><span class="metric-label">开放工单</span><div class="metric-value">14 <small>项</small></div><span class="mini-trend warning">3 项逾期</span></article><article class="metric-card light"><span class="metric-label">今日待清运</span><div class="metric-value">8 <small>站点</small></div><span class="mini-trend positive">较昨日 −2</span></article><article class="metric-card light"><span class="metric-label">平均处理时长</span><div class="metric-value">4.6 <small>小时</small></div><span class="mini-trend positive">目标 ≤ 6 小时</span></article><article class="metric-card light"><span class="metric-label">离线待同步</span><div class="metric-value">3 <small>条</small></div><span class="mini-trend blue">最近 08:42</span></article></div>
             <div class="operations-layout"><article class="panel board-panel"><div class="panel-heading"><div><p class="panel-kicker">WORK ORDER BOARD</p><h2>工单看板</h2></div><div class="board-filter"><button class="filter-chip active">全部</button><button class="filter-chip">我的</button><button class="filter-chip">逾期</button></div></div><div class="kanban" id="kanban"></div></article><aside class="panel route-panel"><div class="panel-heading"><div><p class="panel-kicker">TODAY'S ROUTE</p><h2>今日清运路线</h2></div><span class="status-badge success"><i></i>已优化</span></div><div class="route-summary"><strong>8</strong><span>个站点 · 12.4 km</span><span class="trend positive">预计节省 18 min</span></div><div class="route-list"><div class="route-stop"><span class="route-number">01</span><div><strong>North Residence B</strong><small>家具 · 09:30–10:30</small></div><span class="route-check">✓</span></div><div class="route-stop"><span class="route-number">02</span><div><strong>Library loading bay</strong><small>书籍 · 10:45–11:15</small></div><span class="route-check muted">○</span></div><div class="route-stop"><span class="route-number">03</span><div><strong>Student Union</strong><small>电子产品 · 11:30–12:00</small></div><span class="route-check muted">○</span></div><div class="route-stop"><span class="route-number">04</span><div><strong>South Residence D</strong><small>混合物资 · 13:00–13:45</small></div><span class="route-check muted">○</span></div></div><button class="route-footer" data-action="show-toast" data-toast="路线已复制到剪贴板（演示）">复制路线摘要 <span>↗</span></button></aside></div>
@@ -181,8 +190,9 @@
           </section>
 
           <section class="page" id="page-governance" data-title="治理与风险">
-            <div class="page-heading heading-with-actions"><div><p class="eyebrow">GOVERNANCE & RISK</p><h1>治理与风险</h1><p class="page-subtitle">用最少的数据完成必要的服务，用清晰的责任保证每一次处理可追溯。</p></div><div class="heading-actions"><button class="button secondary" data-action="show-toast" data-toast="审计报告将在正式版生成">审计报告 <span>↓</span></button><button class="button primary" data-action="open-risk">＋ 新建风险</button></div></div>
+            <div class="page-heading heading-with-actions"><div><p class="eyebrow">GOVERNANCE & RISK</p><h1>治理与风险</h1><p class="page-subtitle">用最少的数据完成必要的服务，用清晰的责任保证每一次处理可追溯。</p></div><div class="heading-actions"><button class="button secondary" data-action="show-toast" data-toast="审计报告将在正式版生成">审计报告 <span>↓</span></button><button class="button primary" data-action="open-risk" data-roles="sustainability,admin">＋ 新建风险</button></div></div>
             <div class="governance-grid"><article class="panel governance-card"><div class="panel-heading"><div><p class="panel-kicker">DATA PRINCIPLES</p><h2>数据治理状态</h2></div><span class="status-badge success"><i></i>合规状态良好</span></div><div class="principle-list"><div class="principle-row"><span class="principle-icon green-icon">✓</span><div><strong>数据最小化</strong><small>仅保留服务所需字段，默认不收集身份证明以外的敏感资料。</small></div><span class="status-text green-text">已启用</span></div><div class="principle-row"><span class="principle-icon blue-icon">⌁</span><div><strong>人工监督</strong><small>危险物品、异常交易和激励申诉进入人工审核队列。</small></div><span class="status-text green-text">已启用</span></div><div class="principle-row"><span class="principle-icon amber-icon">◷</span><div><strong>保留期限</strong><small>交接记录保留 12 个月，聚合指标长期保存且去标识化。</small></div><span class="status-text amber-text">待确认</span></div></div></article><article class="panel governance-card"><div class="panel-heading"><div><p class="panel-kicker">ACCESS REVIEW</p><h2>本周权限复核</h2></div><button class="plain-link" data-action="show-toast" data-toast="权限复核详情（演示）">查看全部</button></div><div class="access-summary"><div class="access-ring"><strong>92%</strong><span>已复核</span></div><div><strong>23 / 25</strong><p>账户已完成最小权限检查</p><button class="button small primary" data-action="show-toast" data-toast="复核任务已分配给管理员">处理剩余 2 项</button></div></div></article></div>
+            <article class="panel moderation-panel" data-roles="operator,admin"><div class="panel-heading"><div><p class="panel-kicker">HUMAN REVIEW QUEUE</p><h2>人工审核队列</h2></div><span class="count-pill" id="moderation-count">0 项</span></div><div id="moderation-list" class="moderation-list"><p class="empty-inline">正在加载审核队列…</p></div></article>
             <article class="panel risk-table-panel"><div class="panel-heading"><div><p class="panel-kicker">RISK REGISTER</p><h2>风险登记表</h2></div><div class="risk-legend"><span><i class="risk-dot high"></i>高</span><span><i class="risk-dot medium"></i>中</span><span><i class="risk-dot low"></i>低</span></div></div><div class="table-wrap"><table><thead><tr><th>风险项</th><th>影响对象</th><th>等级</th><th>评分</th><th>缓解措施</th><th>负责人</th><th>状态</th></tr></thead><tbody id="risk-table-body"></tbody></table></div></article>
           </section>
 
@@ -206,3 +216,4 @@
     <script src="app.js"></script>
   </body>
 </html>
+
