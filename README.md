@@ -30,3 +30,7 @@ node server.js
 页面中的数字、物品、工单和影响指标均为模拟数据，不能当作真实校园运营结果。
 
 如果直接打开本地 `index.html`，只要 `node server.js` 正在运行，页面也会自动把 API 请求发送到 `http://localhost:4173`。
+
+## GitHub 部署边界
+
+本仓库已经托管完整源码和模拟数据。GitHub 仓库或 GitHub Pages 可以托管静态文件，但不会运行 `server.js`，也不会持久化 `data/store.json` 的写入。因此，要在线保留这些交互，需要另外部署 Node 后端和持久化数据库；当前仓库适合作为课程演示源码和本地可运行版本。
