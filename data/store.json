@@ -1,0 +1,306 @@
+{
+  "meta": {
+    "offlineQueue": 0,
+    "lastSync": "23:21"
+  },
+  "items": [
+    {
+      "id": "ITM-1042",
+      "name": "木质学习桌",
+      "category": "家具",
+      "location": "North Residence B · 1F",
+      "status": "待领取",
+      "statusKey": "available",
+      "impact": "避免 18 kg 废弃物",
+      "emoji": "🪑",
+      "owner": "匿名学生",
+      "posted": "2 小时前",
+      "history": [
+        {
+          "label": "已发布",
+          "at": "2 小时前"
+        }
+      ]
+    },
+    {
+      "id": "ITM-1038",
+      "name": "Dell 24″ 显示器",
+      "category": "电子产品",
+      "location": "Library loading bay",
+      "status": "待维修",
+      "statusKey": "repair",
+      "impact": "维修后再利用",
+      "emoji": "🖥️",
+      "owner": "IT Services",
+      "posted": "今天 08:15",
+      "history": [
+        {
+          "label": "已发布",
+          "at": "今天 08:15"
+        }
+      ]
+    },
+    {
+      "id": "ITM-1034",
+      "name": "城市通勤自行车",
+      "category": "交通",
+      "location": "South Residence D · 服务台",
+      "status": "待领取",
+      "statusKey": "available",
+      "impact": "避免 12 kg 废弃物",
+      "emoji": "🚲",
+      "owner": "匿名学生",
+      "posted": "昨天",
+      "history": [
+        {
+          "label": "已发布",
+          "at": "昨天"
+        }
+      ]
+    },
+    {
+      "id": "ITM-1027",
+      "name": "课程教材组合",
+      "category": "书籍",
+      "location": "Student Union · 2F",
+      "status": "待捐赠",
+      "statusKey": "donation",
+      "impact": "预计惠及 6 位学生",
+      "emoji": "📚",
+      "owner": "Business Society",
+      "posted": "昨天",
+      "history": [
+        {
+          "label": "已发布",
+          "at": "昨天"
+        }
+      ]
+    },
+    {
+      "id": "ITM-1020",
+      "name": "折叠椅 × 4",
+      "category": "家具",
+      "location": "North Residence C · 3F",
+      "status": "待领取",
+      "statusKey": "available",
+      "impact": "避免 9 kg 废弃物",
+      "emoji": "🪑",
+      "owner": "Residence team",
+      "posted": "2 天前",
+      "history": [
+        {
+          "label": "已发布",
+          "at": "2 天前"
+        }
+      ]
+    },
+    {
+      "id": "ITM-1014",
+      "name": "小型投影仪",
+      "category": "电子产品",
+      "location": "Media Lab · 1F",
+      "status": "待维修",
+      "statusKey": "repair",
+      "impact": "延长 2 年使用期",
+      "emoji": "📽️",
+      "owner": "Media Lab",
+      "posted": "3 天前",
+      "history": [
+        {
+          "label": "已发布",
+          "at": "3 天前"
+        }
+      ]
+    },
+    {
+      "id": "ITM-1008",
+      "name": "收纳箱 × 8",
+      "category": "生活用品",
+      "location": "South Residence D · 1F",
+      "status": "待领取",
+      "statusKey": "available",
+      "impact": "避免 6 kg 废弃物",
+      "emoji": "📦",
+      "owner": "匿名学生",
+      "posted": "3 天前",
+      "history": [
+        {
+          "label": "已发布",
+          "at": "3 天前"
+        }
+      ]
+    },
+    {
+      "id": "ITM-1004",
+      "name": "白板与支架",
+      "category": "学习用品",
+      "location": "Student Union · 3F",
+      "status": "待捐赠",
+      "statusKey": "donation",
+      "impact": "支持社团共享",
+      "emoji": "🧾",
+      "owner": "Design Society",
+      "posted": "4 天前",
+      "history": [
+        {
+          "label": "已发布",
+          "at": "4 天前"
+        }
+      ]
+    }
+  ],
+  "workOrders": [
+    {
+      "id": "WO-2041",
+      "title": "B 区家具集中清运",
+      "area": "North Residence B",
+      "type": "家具",
+      "due": "今天 10:30",
+      "status": "new",
+      "person": "LM",
+      "priority": "高",
+      "description": "退宿季家具集中清运，先检查二维码记录。",
+      "quantity": 1,
+      "history": [
+        {
+          "label": "已创建",
+          "at": "今天 10:30"
+        }
+      ]
+    },
+    {
+      "id": "WO-2038",
+      "title": "电子产品安全检查",
+      "area": "Library loading bay",
+      "type": "电子",
+      "due": "今天 11:15",
+      "status": "progress",
+      "person": "JC",
+      "priority": "中",
+      "description": "检查电源线和可维修状态。",
+      "quantity": 1,
+      "history": [
+        {
+          "label": "已创建",
+          "at": "今天 11:15"
+        }
+      ]
+    },
+    {
+      "id": "WO-2034",
+      "title": "回收点标识更新",
+      "area": "South Residence D",
+      "type": "标识",
+      "due": "今天 13:00",
+      "status": "progress",
+      "person": "AK",
+      "priority": "低",
+      "description": "补充分类说明和离线登记二维码。",
+      "quantity": 1,
+      "history": [
+        {
+          "label": "已创建",
+          "at": "今天 13:00"
+        }
+      ]
+    },
+    {
+      "id": "WO-2029",
+      "title": "书籍领取点补货",
+      "area": "Student Union",
+      "type": "书籍",
+      "due": "今天 14:30",
+      "status": "pickup",
+      "person": "LM",
+      "priority": "中",
+      "description": "将待领取教材移至二层服务台。",
+      "quantity": 1,
+      "history": [
+        {
+          "label": "已创建",
+          "at": "今天 14:30"
+        }
+      ]
+    },
+    {
+      "id": "WO-2024",
+      "title": "上周纸张回收核对",
+      "area": "Academic block",
+      "type": "纸张",
+      "due": "已完成 09:10",
+      "status": "done",
+      "person": "JC",
+      "priority": "低",
+      "description": "已完成称重和台账核对。",
+      "quantity": 1,
+      "history": [
+        {
+          "label": "已完成",
+          "at": "已完成 09:10"
+        }
+      ]
+    },
+    {
+      "id": "WO-2018",
+      "title": "宿舍 C 区维修回访",
+      "area": "North Residence C",
+      "type": "维修",
+      "due": "已完成 昨天",
+      "status": "done",
+      "person": "AK",
+      "priority": "低",
+      "description": "已完成领取者回访。",
+      "quantity": 1,
+      "history": [
+        {
+          "label": "已完成",
+          "at": "已完成 昨天"
+        }
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "id": "R-03",
+      "title": "Wi-Fi 中断导致工单无法更新",
+      "category": "Infrastructure",
+      "affected": "设施团队、学生",
+      "level": "medium",
+      "mitigation": "离线队列 + 纸面备用表 + 恢复后冲突检查",
+      "owner": "运营负责人",
+      "status": "已缓解",
+      "probability": 3,
+      "impact": 3,
+      "score": 9,
+      "due": "待确认"
+    },
+    {
+      "id": "R-05",
+      "title": "奖励机制造成不公平参与",
+      "category": "Ethics",
+      "affected": "低带宽用户、残障用户",
+      "level": "high",
+      "mitigation": "不以个人排名为唯一激励，保留人工申诉和替代渠道",
+      "owner": "治理负责人",
+      "status": "监控中",
+      "probability": 3,
+      "impact": 3,
+      "score": 9,
+      "due": "待确认"
+    },
+    {
+      "id": "R-07",
+      "title": "危险物品误发布",
+      "category": "Safety",
+      "affected": "领取者、设施团队",
+      "level": "high",
+      "mitigation": "分类规则、关键词拦截、人工审核和下架审计",
+      "owner": "学生大使",
+      "status": "已缓解",
+      "probability": 3,
+      "impact": 3,
+      "score": 9,
+      "due": "待确认"
+    }
+  ]
+}

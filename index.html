@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="CampusLoop 校园循环资源运营系统交互原型" />
+    <title>CampusLoop · 校园循环资源运营系统</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="主导航">
+        <div class="brand-lockup">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" role="img">
+              <path d="M24 5c8.3 0 15.2 5.8 16.8 13.5" />
+              <path d="M40.8 18.5l-7.3-.8 2.5-6.8" />
+              <path d="M24 43c-8.3 0-15.2-5.8-16.8-13.5" />
+              <path d="M7.2 29.5l7.3.8-2.5 6.8" />
+              <path d="M39.8 24c0 8.7-7.1 15.8-15.8 15.8S8.2 32.7 8.2 24 15.3 8.2 24 8.2" />
+            </svg>
+          </div>
+          <div>
+            <strong>CampusLoop</strong>
+            <span>CCRE · SWMIS</span>
+          </div>
+        </div>
+
+        <div class="pilot-chip"><span class="pulse-dot"></span> Pilot workspace <strong>·</strong> Residence B–D</div>
+
+        <nav class="nav-list" id="main-nav">
+          <button class="nav-item active" data-page="overview"><span class="nav-icon">⌂</span><span>总览</span><span class="nav-count">01</span></button>
+          <button class="nav-item" data-page="exchange"><span class="nav-icon">↻</span><span>资源交换</span><span class="nav-count">128</span></button>
+          <button class="nav-item" data-page="operations"><span class="nav-icon">✣</span><span>设施运营</span><span class="nav-count alert">14</span></button>
+          <button class="nav-item" data-page="impact"><span class="nav-icon">◒</span><span>影响仪表板</span></button>
+          <button class="nav-item" data-page="governance"><span class="nav-icon">◈</span><span>治理与风险</span><span class="nav-count">03</span></button>
+          <button class="nav-item" data-page="implementation"><span class="nav-icon">↗</span><span>实施路线</span></button>
+          <button class="nav-item" data-page="evidence"><span class="nav-icon">⌁</span><span>研究证据</span></button>
+        </nav>
+
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-label">WORKSPACE</div>
+        <button class="nav-item subdued" data-action="show-toast" data-toast="演示环境暂不支持设置修改"><span class="nav-icon">⚙</span><span>项目设置</span></button>
+        <button class="nav-item subdued" data-action="show-toast" data-toast="已打开帮助中心（演示）"><span class="nav-icon">?</span><span>帮助中心</span></button>
+
+        <div class="sidebar-bottom">
+          <div class="offline-card">
+            <div class="offline-icon">⌁</div>
+            <div><strong id="offline-count">离线队列 03</strong><span id="offline-label">等待同步到云端</span></div>
+            <button class="mini-icon-button" id="sync-sidebar" aria-label="同步离线队列">↥</button>
+          </div>
+          <div class="profile-row">
+            <div class="avatar">LM</div>
+            <div><strong>Lin Mei</strong><span>Campus operator</span></div>
+            <button class="more-button" aria-label="更多选项">•••</button>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main-shell">
+        <header class="topbar">
+          <div class="breadcrumb"><span>CampusLoop</span><span class="crumb-separator">/</span><strong id="breadcrumb-current">总览</strong></div>
+          <div class="topbar-actions">
+            <div class="server-status loading" id="server-status"><span class="status-dot"></span><span id="server-status-text">连接后端中…</span></div>
+            <select class="role-switcher" id="role-switcher" aria-label="切换演示角色"><option value="operator">设施运营</option><option value="student">学生用户</option><option value="sustainability">可持续管理员</option><option value="admin">系统管理员</option></select>
+            <button class="topbar-button" id="offline-mode-button"><span>⌁</span> 模拟离线</button>
+            <button class="topbar-button" id="top-sync"><span>↥</span> 同步 <b>3</b></button>
+            <button class="topbar-button icon-only" data-action="show-toast" data-toast="暂无新通知" aria-label="通知">♢<span class="notification-dot"></span></button>
+            <div class="topbar-avatar">LM</div>
+          </div>
+        </header>
+
+        <div class="content-wrap">
+          <section class="page active" id="page-overview" data-title="总览">
+            <div class="page-heading heading-with-actions">
+              <div>
+                <p class="eyebrow">MONDAY · 24 NOV 2026</p>
+                <h1>早上好，Lin <span class="wave">✦</span></h1>
+                <p class="page-subtitle">退宿季试点进入第 3 周。今天优先处理 <strong>14 个设施工单</strong> 和 <strong>3 条离线记录</strong>。</p>
+              </div>
+              <div class="heading-actions">
+                <button class="button secondary" data-page-jump="impact">查看影响报告 <span>↗</span></button>
+                <button class="button primary" data-action="open-add-item"><span>＋</span> 发布资源</button>
+              </div>
+            </div>
+
+            <div class="metric-grid">
+              <article class="metric-card green">
+                <div class="metric-top"><span class="metric-label">本月避免填埋</span><span class="metric-icon">♧</span></div>
+                <div class="metric-value">2,846 <small>kg</small></div>
+                <div class="metric-foot"><span class="trend positive">↗ 18.4%</span><span>vs. 上月</span></div>
+              </article>
+              <article class="metric-card blue">
+                <div class="metric-top"><span class="metric-label">活跃资源</span><span class="metric-icon">◌</span></div>
+                <div class="metric-value">128 <small>件</small></div>
+                <div class="metric-foot"><span class="trend positive">↗ 12</span><span>过去 7 天</span></div>
+              </article>
+              <article class="metric-card amber">
+                <div class="metric-top"><span class="metric-label">再利用率</span><span class="metric-icon">◔</span></div>
+                <div class="metric-value">68.4<small>%</small></div>
+                <div class="metric-foot"><span class="trend positive">↗ 4.8%</span><span>试点基线</span></div>
+              </article>
+              <article class="metric-card ink">
+                <div class="metric-top"><span class="metric-label">待处理工单</span><span class="metric-icon">✣</span></div>
+                <div class="metric-value">14 <small>项</small></div>
+                <div class="metric-foot"><span class="trend warning">3 项逾期</span><span>需要关注</span></div>
+              </article>
+            </div>
+
+            <div class="dashboard-grid overview-grid">
+              <article class="panel chart-panel large-panel">
+                <div class="panel-heading"><div><p class="panel-kicker">CIRCULARITY TREND</p><h2>资源循环量</h2></div><button class="select-button">最近 30 天 <span>⌄</span></button></div>
+                <div class="chart-summary"><strong>2,846 kg</strong><span class="trend positive">↗ 18.4%</span><span>较上月同期</span></div>
+                <div class="bar-chart" aria-label="资源循环量趋势图">
+                  <div class="bar-group"><span class="bar-value">320</span><div class="bar" style="height:45%"></div><span>11/01</span></div>
+                  <div class="bar-group"><span class="bar-value">410</span><div class="bar" style="height:58%"></div><span>11/05</span></div>
+                  <div class="bar-group"><span class="bar-value">350</span><div class="bar" style="height:50%"></div><span>11/09</span></div>
+                  <div class="bar-group"><span class="bar-value">495</span><div class="bar" style="height:69%"></div><span>11/13</span></div>
+                  <div class="bar-group"><span class="bar-value">530</span><div class="bar active" style="height:76%"></div><span>11/17</span></div>
+                  <div class="bar-group"><span class="bar-value">741</span><div class="bar highlight" style="height:100%"></div><span>11/21</span></div>
+                  <div class="bar-group"><span class="bar-value">—</span><div class="bar ghost" style="height:38%"></div><span>今天</span></div>
+                </div>
+                <div class="chart-legend"><span><i class="legend-dot green-dot"></i>回收与捐赠</span><span><i class="legend-dot blue-dot"></i>维修后再利用</span><span class="chart-note">数据每 6 小时更新</span></div>
+              </article>
+
+              <article class="panel lifecycle-panel">
+                <div class="panel-heading"><div><p class="panel-kicker">ITEM LIFECYCLE</p><h2>资源流转</h2></div><button class="plain-link" data-page-jump="exchange">查看全部 ↗</button></div>
+                <div class="lifecycle-flow">
+                  <div class="lifecycle-step"><span class="life-icon teal">♧</span><strong>发布</strong><small>128</small></div><span class="flow-arrow">→</span>
+                  <div class="lifecycle-step"><span class="life-icon blue-bg">◌</span><strong>审核</strong><small>42</small></div><span class="flow-arrow">→</span>
+                  <div class="lifecycle-step"><span class="life-icon amber-bg">↻</span><strong>流转</strong><small>63</small></div><span class="flow-arrow">→</span>
+                  <div class="lifecycle-step"><span class="life-icon ink-bg">✓</span><strong>完成</strong><small>23</small></div>
+                </div>
+                <div class="lifecycle-note"><span class="note-icon">i</span><span>过去 7 天有 <strong>23 件</strong>资源完成再利用，估算减少 <strong>317 kg</strong> 废弃物。</span></div>
+              </article>
+
+              <article class="panel task-panel">
+                <div class="panel-heading"><div><p class="panel-kicker">TODAY'S QUEUE</p><h2>今日待办</h2></div><span class="count-pill">5 项</span></div>
+                <div class="task-list">
+                  <button class="task-row" data-page-jump="operations"><span class="task-status purple"></span><span class="task-copy"><strong>确认 North Residence B 区清运</strong><small>截止今天 10:30 · Work order #WO-2041</small></span><span class="task-arrow">→</span></button>
+                  <button class="task-row" data-page-jump="exchange"><span class="task-status amber-dot"></span><span class="task-copy"><strong>审核 8 条新资源发布</strong><small>学生提交 · 等待内容审核</small></span><span class="task-arrow">→</span></button>
+                  <button class="task-row" data-action="show-toast" data-toast="已打开离线队列（演示）"><span class="task-status blue-dot"></span><span class="task-copy"><strong>同步 3 条离线记录</strong><small>最后同步：今天 08:42</small></span><span class="task-arrow">→</span></button>
+                  <button class="task-row" data-page-jump="governance"><span class="task-status green-dot"></span><span class="task-copy"><strong>完成本周权限复核</strong><small>截止今天 17:00 · Governance</small></span><span class="task-arrow">→</span></button>
+                </div>
+              </article>
+
+              <article class="panel pilot-panel">
+                <div class="panel-heading"><div><p class="panel-kicker">PILOT HEALTH</p><h2>试点健康度</h2></div><span class="status-badge success"><i></i>运行正常</span></div>
+                <div class="health-row"><div><span>学生参与</span><strong>76%</strong></div><div class="progress"><i style="width:76%"></i></div></div>
+                <div class="health-row"><div><span>工单准时完成</span><strong>91%</strong></div><div class="progress blue-progress"><i style="width:91%"></i></div></div>
+                <div class="health-row"><div><span>数据完整度</span><strong>98%</strong></div><div class="progress amber-progress"><i style="width:98%"></i></div></div>
+                <div class="pilot-footer"><span><i class="green-dot legend-dot"></i>无关键风险</span><button class="plain-link" data-page-jump="governance">查看风险 →</button></div>
+              </article>
+            </div>
+          </section>
+
+          <section class="page" id="page-exchange" data-title="资源交换">
+            <div class="page-heading heading-with-actions">
+              <div><p class="eyebrow">RESOURCE EXCHANGE</p><h1>资源交换</h1><p class="page-subtitle">让每一件物品找到下一次使用的机会。</p></div>
+              <div class="heading-actions"><button class="button secondary" data-action="show-toast" data-toast="筛选器已打开（演示）">筛选 <span>⌄</span></button><button class="button primary" data-action="open-add-item"><span>＋</span> 发布资源</button></div>
+            </div>
+            <div class="subnav-row"><div class="segmented-control"><button class="segment active" data-filter="all">全部 <b>128</b></button><button class="segment" data-filter="available">待领取 <b>42</b></button><button class="segment" data-filter="repair">维修中 <b>17</b></button><button class="segment" data-filter="donation">待捐赠 <b>9</b></button></div><label class="search-box"><span>⌕</span><input id="item-search" type="search" placeholder="搜索物品、地点或编号" /></label></div>
+            <div class="notice-banner"><span class="notice-symbol">✦</span><div><strong>退宿季资源回收行动</strong><span>本周新增领取点：North Residence B 区一层服务台 · 现场支持离线登记</span></div><button class="plain-link" data-action="show-toast" data-toast="已打开试点说明">了解更多 →</button></div>
+            <div class="item-grid" id="item-grid"></div>
+          </section>
+
+          <section class="page" id="page-operations" data-title="设施运营">
+            <div class="page-heading heading-with-actions">
+              <div><p class="eyebrow">FACILITIES OPERATIONS</p><h1>设施运营</h1><p class="page-subtitle">从发现问题到完成回收，每一个工单都有负责人。</p></div>
+              <div class="heading-actions"><button class="button secondary" data-action="show-toast" data-toast="路线视图将在下一版开放">路线视图 <span>↗</span></button><button class="button primary" data-action="open-work-order"><span>＋</span> 新建工单</button></div>
+            </div>
+            <div class="metric-grid compact-metrics"><article class="metric-card light"><span class="metric-label">开放工单</span><div class="metric-value">14 <small>项</small></div><span class="mini-trend warning">3 项逾期</span></article><article class="metric-card light"><span class="metric-label">今日待清运</span><div class="metric-value">8 <small>站点</small></div><span class="mini-trend positive">较昨日 −2</span></article><article class="metric-card light"><span class="metric-label">平均处理时长</span><div class="metric-value">4.6 <small>小时</small></div><span class="mini-trend positive">目标 ≤ 6 小时</span></article><article class="metric-card light"><span class="metric-label">离线待同步</span><div class="metric-value">3 <small>条</small></div><span class="mini-trend blue">最近 08:42</span></article></div>
+            <div class="operations-layout"><article class="panel board-panel"><div class="panel-heading"><div><p class="panel-kicker">WORK ORDER BOARD</p><h2>工单看板</h2></div><div class="board-filter"><button class="filter-chip active">全部</button><button class="filter-chip">我的</button><button class="filter-chip">逾期</button></div></div><div class="kanban" id="kanban"></div></article><aside class="panel route-panel"><div class="panel-heading"><div><p class="panel-kicker">TODAY'S ROUTE</p><h2>今日清运路线</h2></div><span class="status-badge success"><i></i>已优化</span></div><div class="route-summary"><strong>8</strong><span>个站点 · 12.4 km</span><span class="trend positive">预计节省 18 min</span></div><div class="route-list"><div class="route-stop"><span class="route-number">01</span><div><strong>North Residence B</strong><small>家具 · 09:30–10:30</small></div><span class="route-check">✓</span></div><div class="route-stop"><span class="route-number">02</span><div><strong>Library loading bay</strong><small>书籍 · 10:45–11:15</small></div><span class="route-check muted">○</span></div><div class="route-stop"><span class="route-number">03</span><div><strong>Student Union</strong><small>电子产品 · 11:30–12:00</small></div><span class="route-check muted">○</span></div><div class="route-stop"><span class="route-number">04</span><div><strong>South Residence D</strong><small>混合物资 · 13:00–13:45</small></div><span class="route-check muted">○</span></div></div><button class="route-footer" data-action="show-toast" data-toast="路线已复制到剪贴板（演示）">复制路线摘要 <span>↗</span></button></aside></div>
+          </section>
+
+          <section class="page" id="page-impact" data-title="影响仪表板">
+            <div class="page-heading heading-with-actions"><div><p class="eyebrow">IMPACT DASHBOARD</p><h1>影响仪表板</h1><p class="page-subtitle">把资源流转转化为可解释、可审计的校园可持续成果。</p></div><div class="heading-actions"><button class="button secondary" data-action="show-toast" data-toast="报告下载将在正式版开放">导出报告 <span>↓</span></button><button class="button primary" data-action="show-toast" data-toast="分享链接已复制（演示）">分享视图 <span>↗</span></button></div></div>
+            <div class="impact-hero"><div><p class="panel-kicker">PILOT IMPACT · NOVEMBER 2026</p><h2>本月已经让 <em>2,846 kg</em> 资源<br />继续留在校园循环中。</h2><p>模拟数据基于 3 个住宿区和 2 个设施运营点，用于展示提案中的指标设计。</p></div><div class="impact-ring"><div><strong>68.4%</strong><span>再利用率</span></div></div></div>
+            <div class="impact-grid"><article class="panel impact-chart"><div class="panel-heading"><div><p class="panel-kicker">DIVERSION FROM LANDFILL</p><h2>避免填埋趋势</h2></div><select class="select-native" aria-label="选择时间范围"><option>最近 30 天</option><option>本学期</option></select></div><div class="line-chart"><div class="line-grid"><span>800</span><span>600</span><span>400</span><span>200</span><span>0</span></div><svg viewBox="0 0 720 240" preserveAspectRatio="none" role="img" aria-label="避免填埋趋势折线图"><defs><linearGradient id="areaFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#7c5cff" stop-opacity=".28"/><stop offset="100%" stop-color="#7c5cff" stop-opacity="0"/></linearGradient></defs><path class="area" d="M0 210 C55 190 80 205 125 170 S205 182 250 132 S328 154 370 108 S440 124 485 74 S555 90 600 55 S670 65 720 18 L720 240 L0 240Z"/><path class="line" d="M0 210 C55 190 80 205 125 170 S205 182 250 132 S328 154 370 108 S440 124 485 74 S555 90 600 55 S670 65 720 18"/><circle cx="720" cy="18" r="6" class="line-end"/></svg><div class="line-labels"><span>11/01</span><span>11/07</span><span>11/14</span><span>11/21</span><span>今天</span></div></div></article><article class="panel composition-panel"><div class="panel-heading"><div><p class="panel-kicker">MATERIAL MIX</p><h2>资源构成</h2></div><button class="plain-link" data-action="show-toast" data-toast="明细筛选已打开">明细</button></div><div class="donut-wrap"><div class="donut"><div><strong>2,846</strong><span>kg</span></div></div><div class="donut-legend"><div><i class="legend-square purple-square"></i><span>家具与木材</span><strong>42%</strong></div><div><i class="legend-square teal-square"></i><span>书籍与纸张</span><strong>26%</strong></div><div><i class="legend-square amber-square"></i><span>电子产品</span><strong>18%</strong></div><div><i class="legend-square blue-square"></i><span>其他</span><strong>14%</strong></div></div></div></article></div>
+            <div class="bottom-impact-grid"><article class="panel location-panel"><div class="panel-heading"><div><p class="panel-kicker">TOP LOCATIONS</p><h2>贡献最多的地点</h2></div><span class="small-muted">按避免填埋量</span></div><div class="location-list"><div class="location-row"><span class="rank">01</span><div class="location-name"><strong>North Residence B</strong><div class="location-bar"><i style="width:86%"></i></div></div><strong>836 kg</strong></div><div class="location-row"><span class="rank">02</span><div class="location-name"><strong>Library loading bay</strong><div class="location-bar"><i style="width:69%"></i></div></div><strong>612 kg</strong></div><div class="location-row"><span class="rank">03</span><div class="location-name"><strong>Student Union</strong><div class="location-bar"><i style="width:52%"></i></div></div><strong>468 kg</strong></div></div></article><article class="panel insight-panel"><div class="insight-icon">✦</div><p class="panel-kicker">ACTIONABLE INSIGHT</p><h2>把领取点前移到 B 区大堂</h2><p>过去两周，B 区的家具领取完成率比其他地点高 <strong>22%</strong>。建议在退宿高峰期将临时领取点前移到大堂，并由学生大使提供扫码协助。</p><button class="button secondary" data-action="show-toast" data-toast="建议已加入试点行动清单">加入行动清单 <span>→</span></button></article></div>
+          </section>
+
+          <section class="page" id="page-governance" data-title="治理与风险">
+            <div class="page-heading heading-with-actions"><div><p class="eyebrow">GOVERNANCE & RISK</p><h1>治理与风险</h1><p class="page-subtitle">用最少的数据完成必要的服务，用清晰的责任保证每一次处理可追溯。</p></div><div class="heading-actions"><button class="button secondary" data-action="show-toast" data-toast="审计报告将在正式版生成">审计报告 <span>↓</span></button><button class="button primary" data-action="open-risk">＋ 新建风险</button></div></div>
+            <div class="governance-grid"><article class="panel governance-card"><div class="panel-heading"><div><p class="panel-kicker">DATA PRINCIPLES</p><h2>数据治理状态</h2></div><span class="status-badge success"><i></i>合规状态良好</span></div><div class="principle-list"><div class="principle-row"><span class="principle-icon green-icon">✓</span><div><strong>数据最小化</strong><small>仅保留服务所需字段，默认不收集身份证明以外的敏感资料。</small></div><span class="status-text green-text">已启用</span></div><div class="principle-row"><span class="principle-icon blue-icon">⌁</span><div><strong>人工监督</strong><small>危险物品、异常交易和激励申诉进入人工审核队列。</small></div><span class="status-text green-text">已启用</span></div><div class="principle-row"><span class="principle-icon amber-icon">◷</span><div><strong>保留期限</strong><small>交接记录保留 12 个月，聚合指标长期保存且去标识化。</small></div><span class="status-text amber-text">待确认</span></div></div></article><article class="panel governance-card"><div class="panel-heading"><div><p class="panel-kicker">ACCESS REVIEW</p><h2>本周权限复核</h2></div><button class="plain-link" data-action="show-toast" data-toast="权限复核详情（演示）">查看全部</button></div><div class="access-summary"><div class="access-ring"><strong>92%</strong><span>已复核</span></div><div><strong>23 / 25</strong><p>账户已完成最小权限检查</p><button class="button small primary" data-action="show-toast" data-toast="复核任务已分配给管理员">处理剩余 2 项</button></div></div></article></div>
+            <article class="panel risk-table-panel"><div class="panel-heading"><div><p class="panel-kicker">RISK REGISTER</p><h2>风险登记表</h2></div><div class="risk-legend"><span><i class="risk-dot high"></i>高</span><span><i class="risk-dot medium"></i>中</span><span><i class="risk-dot low"></i>低</span></div></div><div class="table-wrap"><table><thead><tr><th>风险项</th><th>影响对象</th><th>等级</th><th>评分</th><th>缓解措施</th><th>负责人</th><th>状态</th></tr></thead><tbody id="risk-table-body"></tbody></table></div></article>
+          </section>
+
+          <section class="page" id="page-implementation" data-title="实施路线">
+            <div class="page-heading heading-with-actions"><div><p class="eyebrow">IMPLEMENTATION ROADMAP</p><h1>实施路线</h1><p class="page-subtitle">从可验证的 Residence B–D 试点开始，再根据指标扩大到全校。</p></div><div class="heading-actions"><button class="button secondary" data-action="show-toast" data-toast="实施摘要已复制（演示）">复制摘要 <span>↗</span></button></div></div>
+            <div class="roadmap-grid"><article class="panel roadmap-panel"><div class="panel-heading"><div><p class="panel-kicker">FOUR PHASES</p><h2>交付阶段</h2></div><span class="status-badge success"><i></i>试点进行中</span></div><div class="roadmap-list"><div class="roadmap-step complete"><span class="roadmap-number">01</span><div><strong>需求与用户研究</strong><small>访谈学生、设施人员和可持续发展办公室，确定流程边界、字段和成功指标。</small></div><span class="roadmap-state">已完成</span></div><div class="roadmap-step current"><span class="roadmap-number">02</span><div><strong>Residence B–D 试点</strong><small>上线资源交换、工单、二维码交接和离线队列，建立第一版基线。</small></div><span class="roadmap-state">进行中</span></div><div class="roadmap-step"><span class="roadmap-number">03</span><div><strong>评估与调整</strong><small>比较再利用率、处理时长、参与率和数据完整度，修正流程与激励机制。</small></div><span class="roadmap-state">待开始</span></div><div class="roadmap-step"><span class="roadmap-number">04</span><div><strong>全校推广</strong><small>连接身份、资产和设施系统，逐步评估传感器或预测分析的必要性。</small></div><span class="roadmap-state">待开始</span></div></div></article><article class="panel budget-panel"><div class="panel-heading"><div><p class="panel-kicker">COMMERCIAL FRAME</p><h2>预算边界</h2></div><span class="small-muted">模拟报价</span></div><div class="budget-total"><strong>USD 640,000</strong><span>实施预算 · 上限 USD 750,000</span><div class="budget-bar"><i style="width:85%"></i></div></div><div class="budget-row"><span>平台与运营模块</span><strong>USD 310k</strong></div><div class="budget-row"><span>集成与安全</span><strong>USD 100k</strong></div><div class="budget-row"><span>试点与学生大使</span><strong>USD 100k</strong></div><div class="budget-row"><span>项目管理与预留</span><strong>USD 70k</strong></div><div class="budget-foot"><span>年度维护</span><strong>USD 170,000 / 年</strong></div></article></div>
+            <div class="integration-strip"><div><p class="panel-kicker">INTEGRATION BOUNDARY</p><h2>系统连接边界</h2><p>第一阶段使用结构化 API 和 CSV 交换，避免让单一系统成为故障点。</p></div><div class="integration-nodes"><span>学生身份</span><i>↔</i><span>CampusLoop</span><i>↔</i><span>设施工单</span><i>↔</i><span>影响看板</span></div></div>
+          </section>
+
+          <section class="page" id="page-evidence" data-title="研究证据">
+            <div class="page-heading heading-with-actions"><div><p class="eyebrow">RESEARCH EVIDENCE</p><h1>研究证据</h1><p class="page-subtitle">这一页只放团队真实取得的访谈、观察和验证记录，不能用模拟内容替代。</p></div><div class="heading-actions"><button class="button primary" data-action="show-toast" data-toast="访谈记录模板已准备">添加访谈记录 <span>＋</span></button></div></div>
+            <div class="evidence-banner"><span class="notice-symbol">!</span><div><strong>演示状态：尚未录入真实访谈</strong><span>当前页面只展示证据结构。完成三名学生访谈并取得授权后，再填入关键发现和照片。</span></div></div>
+            <div class="evidence-grid"><article class="panel evidence-card"><span class="evidence-number">01</span><div><p class="panel-kicker">STUDENT INTERVIEW</p><h2>学生如何处理闲置物品？</h2><p>待填：受访者角色、流程痛点、信任问题、愿意使用的领取方式。</p></div><span class="status-badge pending"><i></i>待访谈</span></article><article class="panel evidence-card"><span class="evidence-number">02</span><div><p class="panel-kicker">STUDENT INTERVIEW</p><h2>为什么不愿意维修或捐赠？</h2><p>待填：时间成本、地点、信息透明度、隐私或安全顾虑。</p></div><span class="status-badge pending"><i></i>待访谈</span></article><article class="panel evidence-card"><span class="evidence-number">03</span><div><p class="panel-kicker">DESIGN DECISION</p><h2>证据如何改变方案？</h2><p>待填：访谈证据对应的功能取舍、假设修正和下一轮验证。</p></div><span class="status-badge pending"><i></i>待验证</span></article></div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <div class="modal-root" id="modal-root" aria-hidden="true"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"><span class="toast-icon">✓</span><span id="toast-message">已完成</span></div>
+    <script src="app.js"></script>
+  </body>
+</html>
