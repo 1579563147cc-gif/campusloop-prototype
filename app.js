@@ -109,7 +109,7 @@ async function login(username, password) {
 
 async function loadAuthenticatedData() {
   setServerStatus('loading', '加载工作空间…');
-  await Promise.all([loadItems(), loadWorkOrders(), loadRisks(), loadModerationQueue()]);
+  await Promise.all([loadItems(), loadWorkOrders(), loadRisks(), loadModerationQueue(), loadAudit()]);
   setServerStatus('online', '已登录 · 后端已连接');
   persistOfflineQueue();
 }
@@ -142,6 +142,12 @@ async function loadModerationQueue() {
   renderModerationQueue(payload.items || []);
 }
 
+async function loadAudit() {
+  if (!['operator', 'admin'].includes(state.user?.role)) return;
+  const payload = await apiRequest('/api/audit');
+  renderAudit(payload.audit || []);
+}
+
 function renderModerationQueue(items) {
   const list = document.getElementById('moderation-list');
   const count = document.getElementById('moderation-count');
@@ -149,6 +155,13 @@ function renderModerationQueue(items) {
   count.textContent = `${items.length} 项`;
   if (!items.length) { list.innerHTML = '<p class="empty-inline">当前没有待人工审核资源。</p>'; return; }
   list.innerHTML = items.map(item => `<div class="moderation-row"><div><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.category)} · ${escapeHtml(item.location)} · ${escapeHtml(item.id)}</span></div><div class="moderation-actions"><button class="button small secondary" data-review-item="${escapeHtml(item.id)}" data-review-status="rejected">驳回</button><button class="button small primary" data-review-item="${escapeHtml(item.id)}" data-review-status="approved">通过</button></div></div>`).join('');
+}
+
+function renderAudit(entries) {
+  const list = document.getElementById('audit-list');
+  if (!list) return;
+  if (!entries.length) { list.innerHTML = '<p class="empty-inline">暂无操作记录。</p>'; return; }
+  list.innerHTML = entries.slice(0, 8).map(entry => `<div class="audit-row"><span class="audit-avatar">${escapeHtml(entry.initials || 'SYS')}</span><div><strong>${escapeHtml(entry.actionLabel)}</strong><small>${escapeHtml(entry.displayName || entry.actor)} · ${escapeHtml(entry.entityLabel)} · ${escapeHtml(entry.at)}</small></div><span class="audit-kind">${escapeHtml(entry.entityType)}</span></div>`).join('');
 }
 
 async function bootstrap() {
@@ -194,7 +207,7 @@ function goToPage(page) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (page === 'exchange') loadItems().catch(handleApiError);
   if (page === 'operations') loadWorkOrders().catch(handleApiError);
-  if (page === 'governance') { loadRisks().catch(handleApiError); loadModerationQueue().catch(handleApiError); }
+  if (page === 'governance') { loadRisks().catch(handleApiError); loadModerationQueue().catch(handleApiError); loadAudit().catch(handleApiError); }
 }
 
 function itemVisual(item) {
