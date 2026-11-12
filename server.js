@@ -19,7 +19,7 @@ const users = [
 
 const seedStore = {
   meta: { offlineQueue: 3, lastSync: '今天 08:42' },
-  userDirectory: users.map(user => ({ username: user.username, role: user.role, displayName: user.displayName, initials: user.initials, active: true, lastLogin: null })),
+  userDirectory: users.map(user => ({ username: user.username, role: user.role, displayName: user.displayName, initials: user.initials, active: true, reviewed: user.username !== 'admin', lastLogin: null })),
   evidence: [],
   items: [
     { id: 'ITM-1042', name: '木质学习桌', category: '家具', location: 'North Residence B · 1F', status: '待领取', statusKey: 'available', impact: '避免 18 kg 废弃物', emoji: '🪑', owner: '匿名学生', posted: '2 小时前' },
@@ -58,11 +58,11 @@ async function initStore() {
   store.risks = store.risks.map(risk => ({ ...risk, probability: Number(risk.probability || 3), impact: Number(risk.impact || 3), score: Number(risk.score || 9), due: risk.due || '待确认' }));
   store.auditLog = Array.isArray(store.auditLog) ? store.auditLog : [];
   store.evidence = Array.isArray(store.evidence) ? store.evidence : [];
-  const defaultDirectory = users.map(user => ({ username: user.username, role: user.role, displayName: user.displayName, initials: user.initials, active: true, lastLogin: null }));
+  const defaultDirectory = users.map(user => ({ username: user.username, role: user.role, displayName: user.displayName, initials: user.initials, active: true, reviewed: user.username !== 'admin', lastLogin: null }));
   store.userDirectory = Array.isArray(store.userDirectory) ? store.userDirectory : defaultDirectory;
   store.userDirectory = users.map(account => {
     const existing = store.userDirectory.find(entry => entry.username === account.username) || {};
-    return { username: account.username, role: existing.role || account.role, displayName: account.displayName, initials: account.initials, active: existing.active !== false, lastLogin: existing.lastLogin || null };
+    return { username: account.username, role: existing.role || account.role, displayName: account.displayName, initials: account.initials, active: existing.active !== false, reviewed: existing.reviewed === undefined ? account.username !== 'admin' : existing.reviewed === true, lastLogin: existing.lastLogin || null };
   });
   await persist();
 }
@@ -128,8 +128,12 @@ async function handleApi(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, mode: 'local-demo', updatedAt: new Date().toISOString() });
   const user = requireUser(req, res); if (!user) return;
   if (req.method === 'GET' && url.pathname === '/api/dashboard') {
-    const visibleOrders = user.role === 'operator' ? store.workOrders.filter(order => order.person === user.initials || order.person === user.username) : user.role === 'student' ? [] : store.workOrders;
-    return sendJson(res, 200, { metrics: { activeItems: store.items.filter(item => item.statusKey !== 'rejected').length, pendingItems: store.items.filter(item => item.status === '待审核').length, claimedItems: store.items.filter(item => item.statusKey === 'donation' && item.status === '已预约').length, openOrders: visibleOrders.filter(order => order.status !== 'done').length, completedOrders: visibleOrders.filter(order => order.status === 'done').length, risks: store.risks.length, offlineQueue: store.meta.offlineQueue, lastSync: store.meta.lastSync, accountCount: store.userDirectory.length, activeAccountCount: store.userDirectory.filter(entry => entry.active !== false).length } });
+    const visibleOrders = user.role === 'operator' ? store.workOrders.filter(order => order.person === user.initials || order.person === user.username || order.person === 'UNASSIGNED') : user.role === 'student' ? [] : store.workOrders;
+    const activeItems = store.items.filter(item => item.statusKey !== 'rejected').length;
+    const claimedItems = store.items.filter(item => item.statusKey === 'donation' || item.status === '已预约').length;
+    const activeAccountCount = store.userDirectory.filter(entry => entry.active !== false).length;
+    const reviewedAccountCount = store.userDirectory.filter(entry => entry.reviewed === true).length;
+    return sendJson(res, 200, { metrics: { activeItems, pendingItems: store.items.filter(item => item.status === '待审核').length, claimedItems, openOrders: visibleOrders.filter(order => order.status !== 'done').length, completedOrders: visibleOrders.filter(order => order.status === 'done').length, risks: store.risks.length, offlineQueue: store.meta.offlineQueue, lastSync: store.meta.lastSync, reuseRate: Number(((claimedItems / Math.max(activeItems, 1)) * 100).toFixed(1)), avoidedKg: claimedItems * 12, accountCount: store.userDirectory.length, activeAccountCount, reviewedAccountCount } });
   }
   if (req.method === 'GET' && segments[0] === 'api' && segments[1] === 'items') {
     const filter = url.searchParams.get('filter'); const query = (url.searchParams.get('search') || '').toLowerCase();
@@ -155,12 +159,12 @@ async function handleApi(req, res, url) {
     const username = segments[2]; const account = users.find(entry => entry.username === username); const target = store.userDirectory.find(entry => entry.username === username);
     if (!account || !target) return sendError(res, 404, 'NOT_FOUND', '账户不存在');
     const body = await readJsonBody(req); const allowedRoles = ['student', 'operator', 'sustainability', 'admin']; const nextRole = body.role === undefined ? target.role : text(body.role);
-    const nextActive = body.active === undefined ? target.active !== false : Boolean(body.active);
+    const nextActive = body.active === undefined ? target.active !== false : Boolean(body.active); const nextReviewed = body.reviewed === undefined ? target.reviewed === true : Boolean(body.reviewed);
     if (!allowedRoles.includes(nextRole)) return sendError(res, 400, 'VALIDATION_ERROR', '角色不在允许范围内');
     if (username === user.username && (!nextActive || nextRole !== 'admin')) return sendError(res, 409, 'SELF_LOCKOUT', '不能停用或降级当前管理员账户');
     const activeAdmins = store.userDirectory.filter(entry => entry.active !== false && entry.role === 'admin' && entry.username !== username).length;
     if ((target.role === 'admin' && (nextRole !== 'admin' || !nextActive)) && activeAdmins === 0) return sendError(res, 409, 'LAST_ADMIN', '系统至少需要保留一个启用中的管理员账户');
-    target.role = nextRole; target.active = nextActive; target.updatedAt = new Date().toISOString();
+    target.role = nextRole; target.active = nextActive; target.reviewed = nextReviewed; target.updatedAt = new Date().toISOString();
     for (const [token, sessionUser] of sessions.entries()) {
       if (sessionUser.username !== username) continue;
       if (!nextActive) sessions.delete(token);
@@ -172,13 +176,13 @@ async function handleApi(req, res, url) {
     const item = store.items.find(entry => entry.id === segments[2]); if (!item) return sendError(res, 404, 'NOT_FOUND', '资源不存在');
     const body = await readJsonBody(req); if (body.action === 'claim') { if (item.statusKey !== 'available') return sendError(res, 409, 'INVALID_STATE', '资源当前不可预约'); item.status = '已预约'; item.statusKey = 'donation'; item.claimedBy = user.username; item.history = [...(item.history || []), { label: '已预约', at: '刚刚', by: user.username }]; await appendAudit(user, '预约资源', 'Resource', item.id, item.name); } else { if (!['operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '只有运营或管理员可以更新资源状态'); if (body.status) { item.status = text(body.status, item.status); item.history = [...(item.history || []), { label: item.status, at: '刚刚', by: user.username }]; await appendAudit(user, '更新资源状态', 'Resource', item.id, item.name); } if (body.statusKey) item.statusKey = text(body.statusKey, item.statusKey); } item.updatedAt = new Date().toISOString(); await persist(); return sendJson(res, 200, { item });
   }
-  if (req.method === 'GET' && url.pathname === '/api/work-orders') { const visible = user.role === 'student' ? [] : user.role === 'operator' ? store.workOrders.filter(order => order.person === user.initials || order.person === user.username) : store.workOrders; return sendJson(res, 200, { workOrders: visible }); }
+  if (req.method === 'GET' && url.pathname === '/api/work-orders') { const visible = user.role === 'student' ? [] : user.role === 'operator' ? store.workOrders.filter(order => order.person === user.initials || order.person === user.username || order.person === 'UNASSIGNED') : store.workOrders; return sendJson(res, 200, { workOrders: visible }); }
   if (req.method === 'POST' && url.pathname === '/api/work-orders') {
-    if (!['operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '只有设施运营或系统管理员可以创建工单');
+    if (!['student','operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '当前账户不能创建工单');
     const body = await readJsonBody(req); const title = text(body.title); if (!title) return sendError(res, 400, 'VALIDATION_ERROR', '工单名称不能为空');
-    const defaultAssignee = user.role === 'operator' ? user.initials : (activeOperators().find(entry => entry.initials === 'LM') || activeOperators()[0])?.initials;
-    const person = normalizedAssignee(body.person, defaultAssignee); if (!person) return sendError(res, 400, 'VALIDATION_ERROR', '负责人必须是启用中的设施运营人员');
-    const order = { id: nextId('WO', store.workOrders), title, area: text(body.area, '待确认地点'), type: text(body.type, '其他'), due: text(body.due, '待确认'), status: 'new', person, quantity: Math.max(1, Number(body.quantity || 1)), priority: text(body.priority, '中'), description: text(body.description), history: [{ label: '待处理', at: '刚刚' }], createdAt: new Date().toISOString() };
+    const defaultAssignee = user.role === 'student' ? 'UNASSIGNED' : user.role === 'operator' ? user.initials : (activeOperators().find(entry => entry.initials === 'LM') || activeOperators()[0])?.initials;
+    const person = user.role === 'student' ? 'UNASSIGNED' : normalizedAssignee(body.person, defaultAssignee); if (!person) return sendError(res, 400, 'VALIDATION_ERROR', '负责人必须是启用中的设施运营人员');
+    const order = { id: nextId('WO', store.workOrders), title, area: text(body.area, '待确认地点'), type: text(body.type, '其他'), due: text(body.due, '待确认'), status: 'new', person, quantity: Math.max(1, Number(body.quantity || 1)), priority: text(body.priority, '中'), description: text(body.description), createdBy: user.username, history: [{ label: '待处理', at: '刚刚', by: user.username }], createdAt: new Date().toISOString() };
     store.workOrders.unshift(order); await appendAudit(user, '创建工单', 'WorkOrder', order.id, order.title); await persist(); return sendJson(res, 201, { workOrder: order });
   }
   if (req.method === 'PATCH' && segments[0] === 'api' && segments[1] === 'work-orders' && segments[2]) {

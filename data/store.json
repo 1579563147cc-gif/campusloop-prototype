@@ -322,6 +322,7 @@
       "displayName": "Mia Student",
       "initials": "MS",
       "active": true,
+      "reviewed": true,
       "lastLogin": null
     },
     {
@@ -330,6 +331,7 @@
       "displayName": "Lin Mei",
       "initials": "LM",
       "active": true,
+      "reviewed": true,
       "lastLogin": null
     },
     {
@@ -338,6 +340,7 @@
       "displayName": "Jordan Chen",
       "initials": "JC",
       "active": true,
+      "reviewed": true,
       "lastLogin": null
     },
     {
@@ -346,6 +349,7 @@
       "displayName": "Ava Kim",
       "initials": "AK",
       "active": true,
+      "reviewed": true,
       "lastLogin": null
     },
     {
@@ -354,6 +358,7 @@
       "displayName": "Ravi Green",
       "initials": "RG",
       "active": true,
+      "reviewed": true,
       "lastLogin": null
     },
     {
@@ -362,6 +367,7 @@
       "displayName": "Alex Admin",
       "initials": "AA",
       "active": true,
+      "reviewed": false,
       "lastLogin": null
     }
   ],
