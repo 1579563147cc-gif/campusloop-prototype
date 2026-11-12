@@ -1,7 +1,7 @@
 {
   "meta": {
     "offlineQueue": 0,
-    "lastSync": "23:21"
+    "lastSync": "今天 08:42"
   },
   "items": [
     {
@@ -303,5 +303,55 @@
       "due": "待确认"
     }
   ],
-  "auditLog": []
+  "auditLog": [],
+  "userDirectory": [
+    {
+      "username": "student",
+      "role": "student",
+      "displayName": "Mia Student",
+      "initials": "MS",
+      "active": true,
+      "lastLogin": null
+    },
+    {
+      "username": "operator",
+      "role": "operator",
+      "displayName": "Lin Mei",
+      "initials": "LM",
+      "active": true,
+      "lastLogin": null
+    },
+    {
+      "username": "operator_jc",
+      "role": "operator",
+      "displayName": "Jordan Chen",
+      "initials": "JC",
+      "active": true,
+      "lastLogin": null
+    },
+    {
+      "username": "operator_ak",
+      "role": "operator",
+      "displayName": "Ava Kim",
+      "initials": "AK",
+      "active": true,
+      "lastLogin": null
+    },
+    {
+      "username": "sustainability",
+      "role": "sustainability",
+      "displayName": "Ravi Green",
+      "initials": "RG",
+      "active": true,
+      "lastLogin": null
+    },
+    {
+      "username": "admin",
+      "role": "admin",
+      "displayName": "Alex Admin",
+      "initials": "AA",
+      "active": true,
+      "lastLogin": null
+    }
+  ]
 }

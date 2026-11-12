@@ -9,7 +9,8 @@ const state = {
   apiOnline: false,
   items: [],
   workOrders: [],
-  risks: []
+  risks: [],
+  users: []
 };
 
 const pageLabels = { overview: '总览', exchange: '资源交换', operations: '设施运营', impact: '影响仪表板', governance: '治理与风险', implementation: '实施路线', evidence: '研究证据' };
@@ -109,7 +110,7 @@ async function login(username, password) {
 
 async function loadAuthenticatedData() {
   setServerStatus('loading', '加载工作空间…');
-  await Promise.all([loadItems(), loadWorkOrders(), loadRisks(), loadModerationQueue(), loadAudit()]);
+  await Promise.all([loadItems(), loadWorkOrders(), loadRisks(), loadModerationQueue(), loadAudit(), loadUsers()]);
   setServerStatus('online', '已登录 · 后端已连接');
   persistOfflineQueue();
 }
@@ -148,6 +149,13 @@ async function loadAudit() {
   renderAudit(payload.audit || []);
 }
 
+async function loadUsers() {
+  if (state.user?.role !== 'admin') return;
+  const payload = await apiRequest('/api/users');
+  state.users = payload.users || [];
+  renderUsers();
+}
+
 function renderModerationQueue(items) {
   const list = document.getElementById('moderation-list');
   const count = document.getElementById('moderation-count');
@@ -162,6 +170,19 @@ function renderAudit(entries) {
   if (!list) return;
   if (!entries.length) { list.innerHTML = '<p class="empty-inline">暂无操作记录。</p>'; return; }
   list.innerHTML = entries.slice(0, 8).map(entry => `<div class="audit-row"><span class="audit-avatar">${escapeHtml(entry.initials || 'SYS')}</span><div><strong>${escapeHtml(entry.actionLabel)}</strong><small>${escapeHtml(entry.displayName || entry.actor)} · ${escapeHtml(entry.entityLabel)} · ${escapeHtml(entry.at)}</small></div><span class="audit-kind">${escapeHtml(entry.entityType)}</span></div>`).join('');
+}
+
+function renderUsers() {
+  const list = document.getElementById('users-list');
+  if (!list) return;
+  if (!state.users.length) { list.innerHTML = '<p class="empty-inline">暂无账户记录。</p>'; return; }
+  const roleOptions = Object.entries(roleLabels).map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+  list.innerHTML = state.users.map(account => {
+    const isSelf = account.username === state.user?.username;
+    const options = roleOptions.replace(`value="${account.role}"`, `value="${account.role}" selected`);
+    const loginLabel = account.lastLogin ? `最近登录 ${escapeHtml(new Date(account.lastLogin).toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' }))}` : '尚未登录';
+    return `<div class="user-row" data-user-row="${escapeHtml(account.username)}"><div class="user-identity"><span class="user-avatar">${escapeHtml(account.initials)}</span><div><strong>${escapeHtml(account.displayName)}</strong><small>${escapeHtml(account.username)} · ${loginLabel}</small></div></div><div class="user-actions"><select data-user-role aria-label="${escapeHtml(account.displayName)} 的角色" ${isSelf ? 'disabled' : ''}>${options}</select><label class="user-active"><input type="checkbox" data-user-active ${account.active !== false ? 'checked' : ''} ${isSelf ? 'disabled' : ''}><span class="toggle-track"></span><em>${account.active !== false ? '启用' : '停用'}</em></label><button class="button small primary" data-save-user ${isSelf ? 'disabled' : ''}>保存</button></div></div>`;
+  }).join('');
 }
 
 async function bootstrap() {
@@ -207,7 +228,7 @@ function goToPage(page) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (page === 'exchange') loadItems().catch(handleApiError);
   if (page === 'operations') loadWorkOrders().catch(handleApiError);
-  if (page === 'governance') { loadRisks().catch(handleApiError); loadModerationQueue().catch(handleApiError); loadAudit().catch(handleApiError); }
+  if (page === 'governance') { loadRisks().catch(handleApiError); loadModerationQueue().catch(handleApiError); loadAudit().catch(handleApiError); loadUsers().catch(handleApiError); }
 }
 
 function itemVisual(item) {
@@ -343,6 +364,7 @@ document.getElementById('login-form').addEventListener('submit', async event => 
 document.querySelectorAll('[data-demo-account]').forEach(button => button.addEventListener('click', () => { const credentials = { student: ['student', 'student123'], operator: ['operator', 'operator123'], sustainability: ['sustainability', 'sustain123'], admin: ['admin', 'admin123'] }[button.dataset.demoAccount]; document.getElementById('login-username').value = credentials[0]; document.getElementById('login-password').value = credentials[1]; }));
 document.getElementById('logout-button').addEventListener('click', async () => { try { await apiRequest('/api/auth/logout', { method: 'POST' }); } catch (_) {} sessionStorage.removeItem('campusloop-token'); state.token = ''; showLogin(); });
 document.addEventListener('click', async event => { const review = event.target.closest('[data-review-item]'); if (!review) return; if (!['operator','admin'].includes(state.user?.role)) return showToast('当前账户没有人工审核权限', 'error'); try { await apiRequest(`/api/items/${encodeURIComponent(review.dataset.reviewItem)}/review`, { method: 'PATCH', body: JSON.stringify({ decision: review.dataset.reviewStatus }) }); await Promise.all([loadItems(), loadModerationQueue()]); showToast(review.dataset.reviewStatus === 'approved' ? '资源已通过人工审核' : '资源已驳回'); } catch (error) { handleApiError(error); } });
+document.addEventListener('click', async event => { const saveButton = event.target.closest('[data-save-user]'); if (!saveButton || saveButton.disabled) return; const row = saveButton.closest('[data-user-row]'); const username = row?.dataset.userRow; if (!username || !requireRole(['admin'])) return; const role = row.querySelector('[data-user-role]')?.value; const active = row.querySelector('[data-user-active]')?.checked; saveButton.disabled = true; try { const payload = await apiRequest(`/api/users/${encodeURIComponent(username)}`, { method: 'PATCH', body: JSON.stringify({ role, active }) }); const index = state.users.findIndex(account => account.username === username); if (index >= 0) state.users[index] = payload.user; renderUsers(); showToast(`${payload.user.displayName} 的账户权限已保存`); } catch (error) { handleApiError(error); saveButton.disabled = false; } });
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && modalRoot.getAttribute('aria-hidden') === 'false') closeModal(); });
 
 bootstrap();

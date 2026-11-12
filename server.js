@@ -11,12 +11,15 @@ const sessions = new Map();
 const users = [
   { username: 'student', password: 'student123', role: 'student', displayName: 'Mia Student', initials: 'MS' },
   { username: 'operator', password: 'operator123', role: 'operator', displayName: 'Lin Mei', initials: 'LM' },
+  { username: 'operator_jc', password: 'operator123', role: 'operator', displayName: 'Jordan Chen', initials: 'JC' },
+  { username: 'operator_ak', password: 'operator123', role: 'operator', displayName: 'Ava Kim', initials: 'AK' },
   { username: 'sustainability', password: 'sustain123', role: 'sustainability', displayName: 'Ravi Green', initials: 'RG' },
   { username: 'admin', password: 'admin123', role: 'admin', displayName: 'Alex Admin', initials: 'AA' }
 ];
 
 const seedStore = {
   meta: { offlineQueue: 3, lastSync: '今天 08:42' },
+  userDirectory: users.map(user => ({ username: user.username, role: user.role, displayName: user.displayName, initials: user.initials, active: true, lastLogin: null })),
   items: [
     { id: 'ITM-1042', name: '木质学习桌', category: '家具', location: 'North Residence B · 1F', status: '待领取', statusKey: 'available', impact: '避免 18 kg 废弃物', emoji: '🪑', owner: '匿名学生', posted: '2 小时前' },
     { id: 'ITM-1038', name: 'Dell 24″ 显示器', category: '电子产品', location: 'Library loading bay', status: '待维修', statusKey: 'repair', impact: '维修后再利用', emoji: '🖥️', owner: 'IT Services', posted: '今天 08:15' },
@@ -53,6 +56,12 @@ async function initStore() {
   store.workOrders = store.workOrders.map(order => ({ ...order, quantity: order.quantity || 1, history: order.history || [{ label: order.status === 'done' ? '已完成' : '已创建', at: order.due || '演示数据' }] }));
   store.risks = store.risks.map(risk => ({ ...risk, probability: Number(risk.probability || 3), impact: Number(risk.impact || 3), score: Number(risk.score || 9), due: risk.due || '待确认' }));
   store.auditLog = Array.isArray(store.auditLog) ? store.auditLog : [];
+  const defaultDirectory = users.map(user => ({ username: user.username, role: user.role, displayName: user.displayName, initials: user.initials, active: true, lastLogin: null }));
+  store.userDirectory = Array.isArray(store.userDirectory) ? store.userDirectory : defaultDirectory;
+  store.userDirectory = users.map(account => {
+    const existing = store.userDirectory.find(entry => entry.username === account.username) || {};
+    return { username: account.username, role: existing.role || account.role, displayName: account.displayName, initials: account.initials, active: existing.active !== false, lastLogin: existing.lastLogin || null };
+  });
   await persist();
 }
 
@@ -101,9 +110,11 @@ function requireUser(req, res, roles = []) {
 async function handleApi(req, res, url) {
   const segments = url.pathname.split('/').filter(Boolean);
   if (req.method === 'POST' && url.pathname === '/api/auth/login') {
-    const body = await readJsonBody(req); const account = users.find(user => user.username === body.username && user.password === body.password);
+    const body = await readJsonBody(req); const account = users.find(user => user.username === body.username && user.password === body.password); const directoryEntry = account && store.userDirectory.find(entry => entry.username === account.username);
     if (!account) return sendError(res, 401, 'INVALID_CREDENTIALS', '用户名或密码不正确');
-    const token = require('crypto').randomUUID(); const safeUser = { username: account.username, role: account.role, displayName: account.displayName, initials: account.initials };
+    if (directoryEntry && directoryEntry.active === false) return sendError(res, 403, 'ACCOUNT_DISABLED', '该账户已停用，请联系系统管理员');
+    if (directoryEntry) directoryEntry.lastLogin = new Date().toISOString();
+    const token = require('crypto').randomUUID(); const safeUser = { username: account.username, role: directoryEntry?.role || account.role, displayName: account.displayName, initials: account.initials };
     sessions.set(token, safeUser); await appendAudit(safeUser, '登录系统', 'Auth', safeUser.username, safeUser.displayName); await persist();
     return sendJson(res, 200, { token, user: safeUser }, { 'Set-Cookie': `cl_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=28800` });
   }
@@ -119,7 +130,7 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/items') {
     const body = await readJsonBody(req); const name = text(body.name); const category = text(body.category, '其他'); const location = text(body.location, '待确认地点');
     if (!name) return sendError(res, 400, 'VALIDATION_ERROR', '资源名称不能为空');
-    const item = { id: nextId('ITM', store.items), name, category, location, status: '待审核', statusKey: 'available', impact: '待估算影响', emoji: itemEmoji(category), owner: 'Lin Mei', posted: '刚刚', note: text(body.note), history: [{ label: '已发布', at: '刚刚' }] };
+    const item = { id: nextId('ITM', store.items), name, category, location, status: '待审核', statusKey: 'available', impact: '待估算影响', emoji: itemEmoji(category), owner: user.displayName, ownerUsername: user.username, posted: '刚刚', note: text(body.note), history: [{ label: '已发布', at: '刚刚', by: user.username }] };
     store.items.unshift(item); await appendAudit(user, '发布资源', 'Resource', item.id, item.name); await persist(); return sendJson(res, 201, { item });
   }
   if (req.method === 'PATCH' && segments[0] === 'api' && segments[1] === 'items' && segments[2] && segments[3] === 'review') {
@@ -129,6 +140,25 @@ async function handleApi(req, res, url) {
   }
   if (req.method === 'GET' && url.pathname === '/api/moderation/queue') { if (!['operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '没有人工审核权限'); return sendJson(res, 200, { items: store.items.filter(item => item.status === '待审核') }); }
   if (req.method === 'GET' && url.pathname === '/api/audit') { if (!['operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '没有审计日志权限'); return sendJson(res, 200, { audit: store.auditLog }); }
+  if (req.method === 'GET' && url.pathname === '/api/users') { if (user.role !== 'admin') return sendError(res, 403, 'FORBIDDEN', '只有系统管理员可以查看账户目录'); return sendJson(res, 200, { users: store.userDirectory }); }
+  if (req.method === 'PATCH' && segments[0] === 'api' && segments[1] === 'users' && segments[2]) {
+    if (user.role !== 'admin') return sendError(res, 403, 'FORBIDDEN', '只有系统管理员可以修改账户权限');
+    const username = segments[2]; const account = users.find(entry => entry.username === username); const target = store.userDirectory.find(entry => entry.username === username);
+    if (!account || !target) return sendError(res, 404, 'NOT_FOUND', '账户不存在');
+    const body = await readJsonBody(req); const allowedRoles = ['student', 'operator', 'sustainability', 'admin']; const nextRole = body.role === undefined ? target.role : text(body.role);
+    const nextActive = body.active === undefined ? target.active !== false : Boolean(body.active);
+    if (!allowedRoles.includes(nextRole)) return sendError(res, 400, 'VALIDATION_ERROR', '角色不在允许范围内');
+    if (username === user.username && (!nextActive || nextRole !== 'admin')) return sendError(res, 409, 'SELF_LOCKOUT', '不能停用或降级当前管理员账户');
+    const activeAdmins = store.userDirectory.filter(entry => entry.active !== false && entry.role === 'admin' && entry.username !== username).length;
+    if ((target.role === 'admin' && (nextRole !== 'admin' || !nextActive)) && activeAdmins === 0) return sendError(res, 409, 'LAST_ADMIN', '系统至少需要保留一个启用中的管理员账户');
+    target.role = nextRole; target.active = nextActive; target.updatedAt = new Date().toISOString();
+    for (const [token, sessionUser] of sessions.entries()) {
+      if (sessionUser.username !== username) continue;
+      if (!nextActive) sessions.delete(token);
+      else sessions.set(token, { ...sessionUser, role: nextRole });
+    }
+    await appendAudit(user, '更新账户权限', 'User', username, target.displayName, `${target.role} · ${target.active ? '启用' : '停用'}`); await persist(); return sendJson(res, 200, { user: target });
+  }
   if (req.method === 'PATCH' && segments[0] === 'api' && segments[1] === 'items' && segments[2]) {
     const item = store.items.find(entry => entry.id === segments[2]); if (!item) return sendError(res, 404, 'NOT_FOUND', '资源不存在');
     const body = await readJsonBody(req); if (body.action === 'claim') { if (item.statusKey !== 'available') return sendError(res, 409, 'INVALID_STATE', '资源当前不可预约'); item.status = '已预约'; item.statusKey = 'donation'; item.claimedBy = user.username; item.history = [...(item.history || []), { label: '已预约', at: '刚刚', by: user.username }]; await appendAudit(user, '预约资源', 'Resource', item.id, item.name); } else { if (!['operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '只有运营或管理员可以更新资源状态'); if (body.status) { item.status = text(body.status, item.status); item.history = [...(item.history || []), { label: item.status, at: '刚刚', by: user.username }]; await appendAudit(user, '更新资源状态', 'Resource', item.id, item.name); } if (body.statusKey) item.statusKey = text(body.statusKey, item.statusKey); } item.updatedAt = new Date().toISOString(); await persist(); return sendJson(res, 200, { item });
@@ -145,6 +175,11 @@ async function handleApi(req, res, url) {
     const body = await readJsonBody(req); if (body.person && ['operator','admin'].includes(user.role)) { order.person = text(body.person, order.person); await appendAudit(user, '分配工单负责人', 'WorkOrder', order.id, order.title); } const allowed = ['new', 'progress', 'pickup', 'done']; if (body.status && allowed.includes(body.status)) { const canUpdate = user.role === 'admin' || user.role === 'operator' || order.person === user.initials; if (!canUpdate) return sendError(res, 403, 'FORBIDDEN', '只有负责人或管理员可以推进该工单'); order.status = body.status; order.history = [...(order.history || []), { label: { new: '待处理', progress: '处理中', pickup: '待清运', done: '已完成' }[body.status], at: '刚刚', by: user.username }]; await appendAudit(user, '推进工单状态', 'WorkOrder', order.id, order.title); } order.updatedAt = new Date().toISOString(); await persist(); return sendJson(res, 200, { workOrder: order });
   }
   if (req.method === 'GET' && url.pathname === '/api/risks') { if (user.role === 'student') return sendError(res, 403, 'FORBIDDEN', '学生账户不能访问风险后台'); return sendJson(res, 200, { risks: store.risks }); }
+  if (req.method === 'PATCH' && segments[0] === 'api' && segments[1] === 'risks' && segments[2]) {
+    if (!['sustainability','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '只有可持续管理员或系统管理员可以更新风险');
+    const risk = store.risks.find(entry => entry.id === segments[2]); if (!risk) return sendError(res, 404, 'NOT_FOUND', '风险不存在');
+    const body = await readJsonBody(req); const labels = { monitoring: '监控中', mitigated: '已缓解', closed: '已关闭' }; if (body.status && labels[body.status]) { risk.status = labels[body.status]; risk.updatedBy = user.username; await appendAudit(user, `更新风险为${risk.status}`, 'Risk', risk.id, risk.title); } if (body.mitigation) risk.mitigation = text(body.mitigation, risk.mitigation); await persist(); return sendJson(res, 200, { risk });
+  }
   if (req.method === 'POST' && url.pathname === '/api/risks') {
     if (!['sustainability','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '只有可持续管理员或系统管理员可以登记风险');
     const body = await readJsonBody(req); const title = text(body.title); const mitigation = text(body.mitigation); if (!title || !mitigation) return sendError(res, 400, 'VALIDATION_ERROR', '风险名称和缓解措施不能为空');
