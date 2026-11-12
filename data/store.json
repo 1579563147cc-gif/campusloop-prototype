@@ -283,7 +283,13 @@
       "probability": 3,
       "impact": 3,
       "score": 9,
-      "due": "待确认"
+      "due": "待确认",
+      "history": [
+        {
+          "label": "已登记",
+          "at": "演示数据"
+        }
+      ]
     },
     {
       "id": "R-05",
@@ -297,7 +303,13 @@
       "probability": 3,
       "impact": 3,
       "score": 9,
-      "due": "待确认"
+      "due": "待确认",
+      "history": [
+        {
+          "label": "已登记",
+          "at": "演示数据"
+        }
+      ]
     },
     {
       "id": "R-07",
@@ -311,7 +323,13 @@
       "probability": 3,
       "impact": 3,
       "score": 9,
-      "due": "待确认"
+      "due": "待确认",
+      "history": [
+        {
+          "label": "已登记",
+          "at": "演示数据"
+        }
+      ]
     }
   ],
   "auditLog": [],

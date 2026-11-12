@@ -13,6 +13,7 @@ const state = {
   riskReports: [],
   reviewCenter: { resources: [], riskReports: [], workOrders: [] },
   todos: [],
+  notifications: [],
   users: [],
   evidence: [],
   metrics: {},
@@ -121,7 +122,7 @@ async function login(username, password) {
 
 async function loadAuthenticatedData() {
   setServerStatus('loading', '加载工作空间…');
-  await Promise.all([loadDashboard(), loadTodos(), loadReviewCenter(), loadItems(), loadWorkOrders(), loadRisks(), loadRiskReports(), loadModerationQueue(), loadAudit(), loadUsers(), loadEvidence(), loadAssignees()]);
+  await Promise.all([loadDashboard(), loadTodos(), loadReviewCenter(), loadNotifications(), loadItems(), loadWorkOrders(), loadRisks(), loadRiskReports(), loadModerationQueue(), loadAudit(), loadUsers(), loadEvidence(), loadAssignees()]);
   setServerStatus('online', '已登录 · 后端已连接');
   persistOfflineQueue();
   startLiveRefresh();
@@ -144,6 +145,16 @@ async function loadReviewCenter() {
   const payload = await apiRequest('/api/review-center');
   state.reviewCenter = payload;
   renderReviewCenter();
+}
+
+async function loadNotifications() {
+  const payload = await apiRequest('/api/notifications');
+  state.notifications = payload.notifications || [];
+}
+
+async function loadReportCenter() {
+  const payload = await apiRequest('/api/report-center');
+  return payload;
 }
 
 async function loadItems() {
@@ -176,7 +187,7 @@ function startLiveRefresh() {
     if (!state.user || !state.apiOnline) return;
     try {
       if (state.activePage === 'operations') await Promise.all([loadWorkOrders(), loadDashboard()]);
-      if (state.activePage === 'overview') await Promise.all([loadDashboard(), loadTodos()]);
+      if (state.activePage === 'overview') await Promise.all([loadDashboard(), loadTodos(), loadNotifications()]);
       if (state.activePage === 'governance') await Promise.all([loadRisks(), loadRiskReports(), loadReviewCenter(), loadModerationQueue(), loadAudit(), loadUsers()]);
     } catch (error) { handleApiError(error); }
   }, 15000);
@@ -236,7 +247,7 @@ function renderAudit(entries) {
   const list = document.getElementById('audit-list');
   if (!list) return;
   if (!entries.length) { list.innerHTML = '<p class="empty-inline">暂无操作记录。</p>'; return; }
-  list.innerHTML = entries.slice(0, 8).map(entry => `<div class="audit-row"><span class="audit-avatar">${escapeHtml(entry.initials || 'SYS')}</span><div><strong>${escapeHtml(entry.actionLabel)}</strong><small>${escapeHtml(entry.displayName || entry.actor)} · ${escapeHtml(entry.entityLabel)} · ${escapeHtml(entry.at)}</small></div><span class="audit-kind">${escapeHtml(entry.entityType)}</span></div>`).join('');
+  list.innerHTML = entries.slice(0, 8).map(entry => { const change = entry.change ? ` · ${escapeHtml(JSON.stringify(entry.change.after))}` : ''; return `<div class="audit-row"><span class="audit-avatar">${escapeHtml(entry.initials || 'SYS')}</span><div><strong>${escapeHtml(entry.actionLabel)}</strong><small>${escapeHtml(entry.displayName || entry.actor)} · ${escapeHtml(entry.entityLabel)} · ${escapeHtml(entry.at)}${change}</small></div><span class="audit-kind">${escapeHtml(entry.entityType)}</span></div>`; }).join('');
 }
 
 function renderUsers() {
@@ -264,6 +275,8 @@ function renderDashboard() {
   setText('overview-claimed-items', metrics.claimedItems ?? '—');
   setText('overview-completed-orders', metrics.completedOrders ?? '—');
   setText('ops-open-orders', metrics.openOrders ?? '—');
+  setText('ops-overdue-orders', metrics.overdueOrders ?? '—');
+  setText('ops-completion-rate', `${metrics.completionRate ?? '—'}%`);
   setText('ops-offline-queue', metrics.offlineQueue ?? state.queuedRequests.length);
   setText('chart-avoided-kg', `${metrics.avoidedKg ?? 0} kg`);
   setText('impact-avoided-kg', `${metrics.avoidedKg ?? 0} kg`);
@@ -473,7 +486,9 @@ function openRiskReportModal() {
 function openRiskDetailModal(id) {
   const risk = state.risks.find(entry => entry.id === id); if (!risk) return;
   const statusMap = { '监控中': 'monitoring', '已缓解': 'mitigated', '已关闭': 'closed' };
-  openModal(`<div class="modal-head"><div><p class="panel-kicker">RISK CONTROL · ${escapeHtml(risk.id)}</p><h2>${escapeHtml(risk.title)}</h2><p>${escapeHtml(risk.category)} · 评分 ${riskScore(risk)} / 25</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><form class="modal-form" id="risk-update-form"><div class="form-field"><label for="risk-update-status">当前状态</label><select id="risk-update-status" name="status"><option value="monitoring" ${statusMap[risk.status] === 'monitoring' ? 'selected' : ''}>监控中</option><option value="mitigated" ${statusMap[risk.status] === 'mitigated' ? 'selected' : ''}>已缓解</option><option value="closed" ${statusMap[risk.status] === 'closed' ? 'selected' : ''}>已关闭</option></select></div><div class="form-field"><label for="risk-update-mitigation">最新缓解措施</label><textarea id="risk-update-mitigation" name="mitigation">${escapeHtml(risk.mitigation)}</textarea></div><div class="detail-list"><div><span>影响对象</span><span>${escapeHtml(risk.affected)}</span></div><div><span>负责人</span><span>${escapeHtml(risk.owner)}</span></div><div><span>复核日期</span><span>${escapeHtml(risk.due)}</span></div></div><div class="modal-actions"><button class="button secondary" type="button" data-close-modal="true">取消</button><button class="button primary" type="submit">保存风险状态 <span>→</span></button></div></form>`);
+  const riskHistory = risk.history || [{ label: '已登记', at: risk.createdAt || '演示数据' }];
+  const riskTimeline = riskHistory.map((step, index) => `<div class="timeline-step ${index === riskHistory.length - 1 ? 'current' : 'complete'}"><span class="timeline-dot"></span><div><strong>${escapeHtml(step.label)}</strong><small>${escapeHtml(step.at || '')} · ${escapeHtml(step.by || '')}</small></div></div>`).join('');
+  openModal(`<div class="modal-head"><div><p class="panel-kicker">RISK CONTROL · ${escapeHtml(risk.id)}</p><h2>${escapeHtml(risk.title)}</h2><p>${escapeHtml(risk.category)} · 评分 ${riskScore(risk)} / 25</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><form class="modal-form" id="risk-update-form"><div class="form-field"><label for="risk-update-status">当前状态</label><select id="risk-update-status" name="status"><option value="monitoring" ${statusMap[risk.status] === 'monitoring' ? 'selected' : ''}>监控中</option><option value="mitigated" ${statusMap[risk.status] === 'mitigated' ? 'selected' : ''}>已缓解</option><option value="closed" ${statusMap[risk.status] === 'closed' ? 'selected' : ''}>已关闭</option></select></div><div class="form-field"><label for="risk-update-mitigation">最新缓解措施</label><textarea id="risk-update-mitigation" name="mitigation">${escapeHtml(risk.mitigation)}</textarea></div><div class="detail-list"><div><span>影响对象</span><span>${escapeHtml(risk.affected)}</span></div><div><span>负责人</span><span>${escapeHtml(risk.owner)}</span></div><div><span>复核日期</span><span>${escapeHtml(risk.due)}</span></div></div><div class="timeline"><p class="panel-kicker">RISK LIFECYCLE</p>${riskTimeline}</div><div class="modal-actions"><button class="button secondary" type="button" data-close-modal="true">取消</button><button class="button primary" type="submit">保存风险状态 <span>→</span></button></div></form>`);
   document.getElementById('risk-update-form').addEventListener('submit', async event => { event.preventDefault(); if (!requireRole(['sustainability', 'admin']) || !requireApi()) return; const body = Object.fromEntries(new FormData(event.currentTarget).entries()); try { await apiRequest(`/api/risks/${encodeURIComponent(risk.id)}`, { method: 'PATCH', body: JSON.stringify(body) }); closeModal(); await Promise.all([loadRisks(), loadDashboard(), loadAudit()]); showToast('风险状态已更新并写入审计'); } catch (error) { handleApiError(error); } });
 }
 
@@ -500,6 +515,13 @@ function exportAudit() {
 
 function openInfoModal(title, kicker, body) {
   openModal(`<div class="modal-head"><div><p class="panel-kicker">${escapeHtml(kicker)}</p><h2>${escapeHtml(title)}</h2></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="info-modal-copy">${body}</div><div class="modal-actions"><button class="button primary" data-close-modal="true">知道了</button></div>`);
+}
+
+async function openReportCenter() {
+  try {
+    const report = await loadReportCenter(); const metrics = report.metrics;
+    openModal(`<div class="modal-head"><div><p class="panel-kicker">REPORT CENTER · ${escapeHtml(new Date(report.generatedAt).toLocaleString('zh-CN'))}</p><h2>运营报告中心</h2><p>当前数据快照来自后端资源、工单、风险和审核记录。</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="report-summary-grid"><div><strong>${escapeHtml(metrics.activeItems)}</strong><span>活跃资源</span></div><div><strong>${escapeHtml(metrics.openOrders)}</strong><span>开放工单</span></div><div><strong>${escapeHtml(metrics.risks)}</strong><span>风险项</span></div><div><strong>${escapeHtml(metrics.riskReportsPending)}</strong><span>待审核风险</span></div></div><div class="audit-report-preview"><p class="panel-kicker">RECENT AUDIT</p>${report.recentAudit.length ? report.recentAudit.slice(0, 5).map(entry => `<p><strong>${escapeHtml(entry.actionLabel)}</strong><small>${escapeHtml(entry.displayName || entry.actor)} · ${escapeHtml(entry.entityLabel)} · ${escapeHtml(entry.at)}</small></p>`).join('') : '<p>暂无审计记录。</p>'}</div><div class="modal-actions"><button class="button secondary" data-close-modal="true">关闭</button><button class="button primary" data-action="export-report">下载 CSV <span>↓</span></button></div>`);
+  } catch (error) { handleApiError(error); }
 }
 
 function openResetDemoModal() {
@@ -560,6 +582,7 @@ document.addEventListener('click', event => {
     if (action.dataset.action === 'copy-route') { const text = 'CampusLoop 今日清运路线：North Residence B 09:30、Library loading bay 10:45、Student Union 11:30、South Residence D 13:00'; copyText(text, '路线摘要已复制', '路线摘要：North Residence B → Library loading bay → Student Union → South Residence D'); }
     if (action.dataset.action === 'focus-filter') { document.getElementById('item-search')?.focus(); showToast('已聚焦搜索框，可按地点、编号或物品筛选'); }
     if (action.dataset.action === 'export-audit') exportAudit();
+    if (action.dataset.action === 'open-report-center') openReportCenter();
     if (action.dataset.action === 'export-report') { downloadCsv('campusloop-impact-report.csv', [['指标', '当前值'], ['避免填埋', `${state.metrics.avoidedKg ?? 0} kg`], ['再利用率', `${state.metrics.reuseRate ?? 0}%`], ['活跃资源', state.metrics.activeItems ?? '—'], ['开放工单', state.metrics.openOrders ?? '—'], ['待审核资源', state.metrics.pendingItems ?? '—'], ['已预约资源', state.metrics.claimedItems ?? '—'], ['风险项', state.metrics.risks ?? '—']]); showToast('影响报告已下载为 CSV'); }
     if (action.dataset.action === 'share-view') { copyText(window.location.href, '当前页面链接已复制', '当前页面链接：' + window.location.href); }
     if (action.dataset.action === 'sync-now') syncQueue();
@@ -567,7 +590,7 @@ document.addEventListener('click', event => {
     if (action.dataset.action === 'copy-summary') { const summary = 'CampusLoop 实施路线：需求与用户研究 → Residence B–D 试点 → 评估与调整 → 全校推广'; copyText(summary, '实施摘要已复制', summary); }
     if (action.dataset.action === 'open-settings') openInfoModal('项目设置', 'WORKSPACE SETTINGS', '<p>当前为本地演示环境。离线模式、自动刷新和数据写入都由当前浏览器与本地 Node 服务控制。</p><p>如需切换账号，请点击右上角退出后重新登录。</p>');
     if (action.dataset.action === 'open-help') openInfoModal('帮助中心', 'INTERACTION GUIDE', '<ul><li>资源交换：发布资源后会进入人工审核队列，学生可预约已通过审核的资源。</li><li>设施运营：负责人只能推进自己负责的工单，管理员可以查看全部工单。</li><li>治理与风险：可持续管理员和系统管理员可以登记、更新风险。</li><li>工单页面每 15 秒刷新一次，页面上的时间会显示最近一次后端同步。</li></ul>');
-    if (action.dataset.action === 'open-notifications') openInfoModal('通知中心', 'NOTIFICATIONS', state.auditEntries?.length ? state.auditEntries.slice(0, 5).map(entry => `<p><strong>${escapeHtml(entry.actionLabel)}</strong><br><small>${escapeHtml(entry.displayName || entry.actor)} · ${escapeHtml(entry.at)}</small></p>`).join('') : '<p>当前没有新的操作通知。</p>');
+    if (action.dataset.action === 'open-notifications') openInfoModal('通知中心', 'NOTIFICATIONS', state.notifications?.length ? state.notifications.slice(0, 8).map(entry => `<p><strong>${escapeHtml(entry.title)}</strong><br><small>${escapeHtml(entry.detail)} · ${escapeHtml(entry.at)}</small></p>`).join('') : '<p>当前没有新的操作通知。</p>');
     if (action.dataset.action === 'open-pilot-info') openInfoModal('退宿季资源回收行动', 'PILOT BRIEF', '<p>本试点围绕 Residence B–D 设计资源发布、人工审核、预约领取、设施工单和离线同步五条闭环。</p><p>页面中的影响数字是课程演示数据；资源、工单、风险、账户和审计记录会写入本地后端数据文件。</p>');
     if (action.dataset.action === 'open-mix-details') openInfoModal('资源构成明细', 'MATERIAL MIX', '<p>家具与木材 42% · 书籍与纸张 26% · 电子产品 18% · 其他 14%。这些比例用于展示 RFP 指标设计，正式部署时应由资源分类记录计算。</p>');
     if (action.dataset.action === 'show-toast') showToast(action.dataset.toast || '已完成');
