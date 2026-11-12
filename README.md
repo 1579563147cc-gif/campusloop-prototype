@@ -10,7 +10,12 @@
 - 离线队列同步提示。
 - 资源发布：`POST /api/items`；
 - 工单创建和状态推进：`POST/PATCH /api/work-orders`；
+- 工单负责人目录和实时状态刷新：`GET /api/work-order-assignees`、页面每 15 秒轮询 `GET /api/work-orders`；
 - 风险登记：`POST /api/risks`；
+- 风险状态与缓解措施更新：`PATCH /api/risks/:id`；
+- 研究证据录入：`GET/POST /api/evidence`；
+- 账户目录和权限修改：`GET /api/users`、`PATCH /api/users/:username`（仅系统管理员）；
+- 审计日志读取：`GET /api/audit`，前端支持 CSV 导出；
 - 离线队列同步：`POST /api/sync`。
 - 角色切换：学生、设施运营、可持续管理员、系统管理员；
 - 登录与服务端角色权限：未登录返回 401，无权限操作返回 403；
@@ -42,6 +47,8 @@ node server.js
 |---|---|---|
 | 学生用户 | `student` | `student123` |
 | 设施运营 | `operator` | `operator123` |
+| 设施运营（Jordan Chen） | `operator_jc` | `operator123` |
+| 设施运营（Ava Kim） | `operator_ak` | `operator123` |
 | 可持续管理员 | `sustainability` | `sustain123` |
 | 系统管理员 | `admin` | `admin123` |
 

@@ -20,6 +20,7 @@ const users = [
 const seedStore = {
   meta: { offlineQueue: 3, lastSync: '今天 08:42' },
   userDirectory: users.map(user => ({ username: user.username, role: user.role, displayName: user.displayName, initials: user.initials, active: true, lastLogin: null })),
+  evidence: [],
   items: [
     { id: 'ITM-1042', name: '木质学习桌', category: '家具', location: 'North Residence B · 1F', status: '待领取', statusKey: 'available', impact: '避免 18 kg 废弃物', emoji: '🪑', owner: '匿名学生', posted: '2 小时前' },
     { id: 'ITM-1038', name: 'Dell 24″ 显示器', category: '电子产品', location: 'Library loading bay', status: '待维修', statusKey: 'repair', impact: '维修后再利用', emoji: '🖥️', owner: 'IT Services', posted: '今天 08:15' },
@@ -56,6 +57,7 @@ async function initStore() {
   store.workOrders = store.workOrders.map(order => ({ ...order, quantity: order.quantity || 1, history: order.history || [{ label: order.status === 'done' ? '已完成' : '已创建', at: order.due || '演示数据' }] }));
   store.risks = store.risks.map(risk => ({ ...risk, probability: Number(risk.probability || 3), impact: Number(risk.impact || 3), score: Number(risk.score || 9), due: risk.due || '待确认' }));
   store.auditLog = Array.isArray(store.auditLog) ? store.auditLog : [];
+  store.evidence = Array.isArray(store.evidence) ? store.evidence : [];
   const defaultDirectory = users.map(user => ({ username: user.username, role: user.role, displayName: user.displayName, initials: user.initials, active: true, lastLogin: null }));
   store.userDirectory = Array.isArray(store.userDirectory) ? store.userDirectory : defaultDirectory;
   store.userDirectory = users.map(account => {
@@ -86,6 +88,9 @@ function nextId(prefix, records) { const max = records.reduce((highest, record) 
 function nextRiskId(records) { const max = records.reduce((highest, record) => Math.max(highest, Number(String(record.id).replace(/\D/g, '')) || 0), 0); return `R-${String(max + 1).padStart(2, '0')}`; }
 function text(value, fallback = '') { return typeof value === 'string' && value.trim() ? value.trim() : fallback; }
 function itemEmoji(category) { if (category.includes('电子')) return '🖥️'; if (category.includes('家具')) return '🪑'; if (category.includes('交通')) return '🚲'; if (category.includes('书')) return '📚'; return '📦'; }
+function activeOperators() { return store.userDirectory.filter(entry => entry.active !== false && entry.role === 'operator'); }
+function validAssignee(value) { return activeOperators().some(entry => entry.initials === value || entry.username === value); }
+function normalizedAssignee(value, fallback) { const candidate = text(value, fallback); const match = activeOperators().find(entry => entry.initials === candidate || entry.username === candidate); return match ? match.initials : null; }
 
 async function appendAudit(user, actionLabel, entityType, entityId, entityLabel, reason = '') {
   store.auditLog.unshift({ id: `AUD-${Date.now()}`, actor: user?.username || 'system', displayName: user?.displayName || 'System', initials: user?.initials || 'SYS', actionLabel, entityType, entityId, entityLabel, reason, at: new Date().toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' }) });
@@ -122,7 +127,10 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/auth/logout') { const user = getSession(req); if (user) { const auth = req.headers.authorization || ''; const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''; if (token) sessions.delete(token); } return sendJson(res, 200, { ok: true }, { 'Set-Cookie': 'cl_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0' }); }
   if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, mode: 'local-demo', updatedAt: new Date().toISOString() });
   const user = requireUser(req, res); if (!user) return;
-  if (req.method === 'GET' && url.pathname === '/api/dashboard') return sendJson(res, 200, { metrics: { activeItems: store.items.length, openOrders: store.workOrders.filter(order => order.status !== 'done').length, risks: store.risks.length, offlineQueue: store.meta.offlineQueue } });
+  if (req.method === 'GET' && url.pathname === '/api/dashboard') {
+    const visibleOrders = user.role === 'operator' ? store.workOrders.filter(order => order.person === user.initials || order.person === user.username) : user.role === 'student' ? [] : store.workOrders;
+    return sendJson(res, 200, { metrics: { activeItems: store.items.filter(item => item.statusKey !== 'rejected').length, pendingItems: store.items.filter(item => item.status === '待审核').length, claimedItems: store.items.filter(item => item.statusKey === 'donation' && item.status === '已预约').length, openOrders: visibleOrders.filter(order => order.status !== 'done').length, completedOrders: visibleOrders.filter(order => order.status === 'done').length, risks: store.risks.length, offlineQueue: store.meta.offlineQueue, lastSync: store.meta.lastSync, accountCount: store.userDirectory.length, activeAccountCount: store.userDirectory.filter(entry => entry.active !== false).length } });
+  }
   if (req.method === 'GET' && segments[0] === 'api' && segments[1] === 'items') {
     const filter = url.searchParams.get('filter'); const query = (url.searchParams.get('search') || '').toLowerCase();
     return sendJson(res, 200, { items: store.items.filter(item => (!filter || filter === 'all' || item.statusKey === filter) && (!query || `${item.name} ${item.category} ${item.location} ${item.id}`.toLowerCase().includes(query))) });
@@ -141,6 +149,7 @@ async function handleApi(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/moderation/queue') { if (!['operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '没有人工审核权限'); return sendJson(res, 200, { items: store.items.filter(item => item.status === '待审核') }); }
   if (req.method === 'GET' && url.pathname === '/api/audit') { if (!['operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '没有审计日志权限'); return sendJson(res, 200, { audit: store.auditLog }); }
   if (req.method === 'GET' && url.pathname === '/api/users') { if (user.role !== 'admin') return sendError(res, 403, 'FORBIDDEN', '只有系统管理员可以查看账户目录'); return sendJson(res, 200, { users: store.userDirectory }); }
+  if (req.method === 'GET' && url.pathname === '/api/work-order-assignees') { if (!['operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '没有工单分配权限'); return sendJson(res, 200, { assignees: activeOperators().map(entry => ({ username: entry.username, displayName: entry.displayName, initials: entry.initials })) }); }
   if (req.method === 'PATCH' && segments[0] === 'api' && segments[1] === 'users' && segments[2]) {
     if (user.role !== 'admin') return sendError(res, 403, 'FORBIDDEN', '只有系统管理员可以修改账户权限');
     const username = segments[2]; const account = users.find(entry => entry.username === username); const target = store.userDirectory.find(entry => entry.username === username);
@@ -163,16 +172,18 @@ async function handleApi(req, res, url) {
     const item = store.items.find(entry => entry.id === segments[2]); if (!item) return sendError(res, 404, 'NOT_FOUND', '资源不存在');
     const body = await readJsonBody(req); if (body.action === 'claim') { if (item.statusKey !== 'available') return sendError(res, 409, 'INVALID_STATE', '资源当前不可预约'); item.status = '已预约'; item.statusKey = 'donation'; item.claimedBy = user.username; item.history = [...(item.history || []), { label: '已预约', at: '刚刚', by: user.username }]; await appendAudit(user, '预约资源', 'Resource', item.id, item.name); } else { if (!['operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '只有运营或管理员可以更新资源状态'); if (body.status) { item.status = text(body.status, item.status); item.history = [...(item.history || []), { label: item.status, at: '刚刚', by: user.username }]; await appendAudit(user, '更新资源状态', 'Resource', item.id, item.name); } if (body.statusKey) item.statusKey = text(body.statusKey, item.statusKey); } item.updatedAt = new Date().toISOString(); await persist(); return sendJson(res, 200, { item });
   }
-  if (req.method === 'GET' && url.pathname === '/api/work-orders') { const visible = user.role === 'student' ? [] : user.role === 'operator' ? store.workOrders.filter(order => order.person === user.initials || order.person === user.username || order.person === 'LM') : store.workOrders; return sendJson(res, 200, { workOrders: visible }); }
+  if (req.method === 'GET' && url.pathname === '/api/work-orders') { const visible = user.role === 'student' ? [] : user.role === 'operator' ? store.workOrders.filter(order => order.person === user.initials || order.person === user.username) : store.workOrders; return sendJson(res, 200, { workOrders: visible }); }
   if (req.method === 'POST' && url.pathname === '/api/work-orders') {
     if (!['operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '只有设施运营或系统管理员可以创建工单');
     const body = await readJsonBody(req); const title = text(body.title); if (!title) return sendError(res, 400, 'VALIDATION_ERROR', '工单名称不能为空');
-    const order = { id: nextId('WO', store.workOrders), title, area: text(body.area, '待确认地点'), type: text(body.type, '其他'), due: text(body.due, '待确认'), status: 'new', person: text(body.person, 'LM'), quantity: Number(body.quantity || 1), priority: text(body.priority, '中'), description: text(body.description), history: [{ label: '待处理', at: '刚刚' }], createdAt: new Date().toISOString() };
+    const defaultAssignee = user.role === 'operator' ? user.initials : (activeOperators().find(entry => entry.initials === 'LM') || activeOperators()[0])?.initials;
+    const person = normalizedAssignee(body.person, defaultAssignee); if (!person) return sendError(res, 400, 'VALIDATION_ERROR', '负责人必须是启用中的设施运营人员');
+    const order = { id: nextId('WO', store.workOrders), title, area: text(body.area, '待确认地点'), type: text(body.type, '其他'), due: text(body.due, '待确认'), status: 'new', person, quantity: Math.max(1, Number(body.quantity || 1)), priority: text(body.priority, '中'), description: text(body.description), history: [{ label: '待处理', at: '刚刚' }], createdAt: new Date().toISOString() };
     store.workOrders.unshift(order); await appendAudit(user, '创建工单', 'WorkOrder', order.id, order.title); await persist(); return sendJson(res, 201, { workOrder: order });
   }
   if (req.method === 'PATCH' && segments[0] === 'api' && segments[1] === 'work-orders' && segments[2]) {
     const order = store.workOrders.find(entry => entry.id === segments[2]); if (!order) return sendError(res, 404, 'NOT_FOUND', '工单不存在');
-    const body = await readJsonBody(req); if (body.person && ['operator','admin'].includes(user.role)) { order.person = text(body.person, order.person); await appendAudit(user, '分配工单负责人', 'WorkOrder', order.id, order.title); } const allowed = ['new', 'progress', 'pickup', 'done']; if (body.status && allowed.includes(body.status)) { const canUpdate = user.role === 'admin' || user.role === 'operator' || order.person === user.initials; if (!canUpdate) return sendError(res, 403, 'FORBIDDEN', '只有负责人或管理员可以推进该工单'); order.status = body.status; order.history = [...(order.history || []), { label: { new: '待处理', progress: '处理中', pickup: '待清运', done: '已完成' }[body.status], at: '刚刚', by: user.username }]; await appendAudit(user, '推进工单状态', 'WorkOrder', order.id, order.title); } order.updatedAt = new Date().toISOString(); await persist(); return sendJson(res, 200, { workOrder: order });
+    const body = await readJsonBody(req); if (body.person && ['operator','admin'].includes(user.role)) { const nextPerson = normalizedAssignee(body.person, order.person); if (!nextPerson) return sendError(res, 400, 'VALIDATION_ERROR', '负责人必须是启用中的设施运营人员'); order.person = nextPerson; await appendAudit(user, '分配工单负责人', 'WorkOrder', order.id, order.title); } const allowed = ['new', 'progress', 'pickup', 'done']; if (body.status && allowed.includes(body.status)) { const canUpdate = user.role === 'admin' || order.person === user.initials; if (!canUpdate) return sendError(res, 403, 'FORBIDDEN', '只有负责人或管理员可以推进该工单'); order.status = body.status; order.history = [...(order.history || []), { label: { new: '待处理', progress: '处理中', pickup: '待清运', done: '已完成' }[body.status], at: '刚刚', by: user.username }]; await appendAudit(user, '推进工单状态', 'WorkOrder', order.id, order.title); } order.updatedAt = new Date().toISOString(); await persist(); return sendJson(res, 200, { workOrder: order });
   }
   if (req.method === 'GET' && url.pathname === '/api/risks') { if (user.role === 'student') return sendError(res, 403, 'FORBIDDEN', '学生账户不能访问风险后台'); return sendJson(res, 200, { risks: store.risks }); }
   if (req.method === 'PATCH' && segments[0] === 'api' && segments[1] === 'risks' && segments[2]) {
@@ -186,6 +197,13 @@ async function handleApi(req, res, url) {
     const probability = Math.min(5, Math.max(1, Number(body.probability || 3))); const impact = Math.min(5, Math.max(1, Number(body.impact || 3)));
     const risk = { id: nextRiskId(store.risks), title, category: text(body.category, 'Operations'), affected: text(body.affected, '待确认'), level: ['high', 'medium', 'low'].includes(body.level) ? body.level : 'medium', probability, impact, score: probability * impact, due: text(body.due, '待确认'), mitigation, owner: text(body.owner, '待分配'), status: '监控中', createdAt: new Date().toISOString() };
     store.risks.unshift(risk); await appendAudit(user, '登记风险', 'Risk', risk.id, risk.title); await persist(); return sendJson(res, 201, { risk });
+  }
+  if (req.method === 'GET' && url.pathname === '/api/evidence') { if (user.role === 'student') return sendError(res, 403, 'FORBIDDEN', '学生账户不能访问内部研究证据'); return sendJson(res, 200, { evidence: store.evidence }); }
+  if (req.method === 'POST' && url.pathname === '/api/evidence') {
+    if (!['operator','sustainability','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '当前账户不能录入研究证据');
+    const body = await readJsonBody(req); const title = text(body.title); const finding = text(body.finding); if (!title || !finding) return sendError(res, 400, 'VALIDATION_ERROR', '证据标题和关键发现不能为空');
+    const evidence = { id: nextId('EV', store.evidence), title, type: text(body.type, '访谈'), source: text(body.source, '待补充'), finding, consent: body.consent === true, createdBy: user.username, createdAt: new Date().toISOString() };
+    store.evidence.unshift(evidence); await appendAudit(user, '录入研究证据', 'Evidence', evidence.id, evidence.title); await persist(); return sendJson(res, 201, { evidence });
   }
   if (req.method === 'POST' && url.pathname === '/api/sync') { store.meta.offlineQueue = 0; store.meta.lastSync = new Date().toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' }); await persist(); return sendJson(res, 200, { synced: true, meta: store.meta }); }
   return sendError(res, 404, 'NOT_FOUND', 'API 路径不存在');

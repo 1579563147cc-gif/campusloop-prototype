@@ -183,8 +183,19 @@
         {
           "label": "已创建",
           "at": "今天 11:15"
+        },
+        {
+          "label": "待清运",
+          "at": "刚刚",
+          "by": "operator_jc"
+        },
+        {
+          "label": "处理中",
+          "at": "刚刚",
+          "by": "operator_jc"
         }
-      ]
+      ],
+      "updatedAt": "2026-11-12T19:27:08.616Z"
     },
     {
       "id": "WO-2034",
@@ -353,5 +364,6 @@
       "active": true,
       "lastLogin": null
     }
-  ]
+  ],
+  "evidence": []
 }
