@@ -10,6 +10,7 @@ const state = {
   items: [],
   workOrders: [],
   risks: [],
+  riskReports: [],
   users: [],
   evidence: [],
   metrics: {},
@@ -118,7 +119,7 @@ async function login(username, password) {
 
 async function loadAuthenticatedData() {
   setServerStatus('loading', '加载工作空间…');
-  await Promise.all([loadDashboard(), loadItems(), loadWorkOrders(), loadRisks(), loadModerationQueue(), loadAudit(), loadUsers(), loadEvidence(), loadAssignees()]);
+  await Promise.all([loadDashboard(), loadItems(), loadWorkOrders(), loadRisks(), loadRiskReports(), loadModerationQueue(), loadAudit(), loadUsers(), loadEvidence(), loadAssignees()]);
   setServerStatus('online', '已登录 · 后端已连接');
   persistOfflineQueue();
   startLiveRefresh();
@@ -160,7 +161,7 @@ function startLiveRefresh() {
     if (!state.user || !state.apiOnline) return;
     try {
       if (state.activePage === 'operations') await Promise.all([loadWorkOrders(), loadDashboard()]);
-      if (state.activePage === 'governance') await Promise.all([loadRisks(), loadModerationQueue(), loadAudit(), loadUsers()]);
+      if (state.activePage === 'governance') await Promise.all([loadRisks(), loadRiskReports(), loadModerationQueue(), loadAudit(), loadUsers()]);
     } catch (error) { handleApiError(error); }
   }, 15000);
 }
@@ -170,6 +171,13 @@ async function loadRisks() {
   const payload = await apiRequest('/api/risks');
   state.risks = payload.risks || [];
   renderRisks();
+}
+
+async function loadRiskReports() {
+  if (!['sustainability', 'admin'].includes(state.user?.role)) return;
+  const payload = await apiRequest('/api/risk-reports');
+  state.riskReports = payload.reports || [];
+  renderRiskReports();
 }
 
 async function loadModerationQueue() {
@@ -311,7 +319,7 @@ function goToPage(page) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (page === 'exchange') loadItems().catch(handleApiError);
   if (page === 'operations') loadWorkOrders().catch(handleApiError);
-  if (page === 'governance') { loadRisks().catch(handleApiError); loadModerationQueue().catch(handleApiError); loadAudit().catch(handleApiError); loadUsers().catch(handleApiError); }
+  if (page === 'governance') { loadRisks().catch(handleApiError); loadRiskReports().catch(handleApiError); loadModerationQueue().catch(handleApiError); loadAudit().catch(handleApiError); loadUsers().catch(handleApiError); }
   if (page === 'evidence') loadEvidence().catch(handleApiError);
 }
 
@@ -369,7 +377,15 @@ function riskScore(risk) { return Number(risk.score || ((Number(risk.probability
 function renderRisks() {
   const body = document.getElementById('risk-table-body');
   if (!body) return;
-  body.innerHTML = state.risks.length ? state.risks.map(risk => `<tr><td><strong>${escapeHtml(risk.title)}</strong><span class="table-sub">${escapeHtml(risk.category)} · ${escapeHtml(risk.id)}</span></td><td>${escapeHtml(risk.affected)}</td><td><span class="risk-label ${riskClass(risk.level)}">${riskLabel(risk.level)}</span></td><td><span class="score-pill ${riskScore(risk) >= 12 ? 'score-high' : riskScore(risk) >= 6 ? 'score-medium' : 'score-low'}">${riskScore(risk)} / 25</span></td><td>${escapeHtml(risk.mitigation)}</td><td>${escapeHtml(risk.owner)}</td><td><button class="status-button ${risk.status === '已缓解' ? 'green-text' : 'amber-text'}" data-risk-id="${escapeHtml(risk.id)}">${escapeHtml(risk.status)} <span>↗</span></button></td></tr>`).join('') : '<tr><td colspan="7">暂无风险记录</td></tr>';
+  body.innerHTML = state.risks.length ? state.risks.map(risk => `<tr><td><strong>${escapeHtml(risk.title)}</strong><span class="table-sub">${escapeHtml(risk.category)} · ${escapeHtml(risk.id)}</span></td><td>${escapeHtml(risk.affected)}</td><td><span class="risk-label ${riskClass(risk.level)}">${riskLabel(risk.level)}</span></td><td><span class="score-pill ${riskScore(risk) >= 12 ? 'score-high' : riskScore(risk) >= 6 ? 'score-medium' : 'score-low'}">${riskScore(risk)} / 25</span></td><td>${escapeHtml(risk.mitigation)}</td><td>${escapeHtml(risk.owner)}</td><td><button class="risk-status-action ${risk.status === '已缓解' ? 'green-action' : 'amber-action'}" data-risk-id="${escapeHtml(risk.id)}"><span class="risk-status-dot"></span><strong>${escapeHtml(risk.status)}</strong><span class="risk-edit-label">编辑状态&nbsp;↗</span></button></td></tr>`).join('') : '<tr><td colspan="7">暂无风险记录</td></tr>';
+}
+
+function renderRiskReports() {
+  const list = document.getElementById('risk-report-list'); const count = document.getElementById('risk-report-count');
+  if (!list || !count) return;
+  count.textContent = `${state.riskReports.length} 项待审核`;
+  if (!state.riskReports.length) { list.innerHTML = '<p class="empty-inline">当前没有待审核的风险上报。</p>'; return; }
+  list.innerHTML = state.riskReports.map(report => `<div class="risk-report-row"><div class="risk-report-copy"><strong>${escapeHtml(report.title)}</strong><small>${escapeHtml(report.category)} · ${escapeHtml(report.location)} · ${escapeHtml(report.reportedByName || report.reportedBy)}</small><p>${escapeHtml(report.mitigation)}</p></div><div class="risk-report-actions"><button class="button small secondary" data-review-risk-report="${escapeHtml(report.id)}" data-review-status="rejected">驳回</button><button class="button small primary" data-review-risk-report="${escapeHtml(report.id)}" data-review-status="approved">通过并登记</button></div></div>`).join('');
 }
 
 function openModal(content) {
@@ -411,6 +427,11 @@ function openOrderModal(id) {
 function openRiskModal() {
   openModal(`<div class="modal-head"><div><p class="panel-kicker">NEW RISK · API CREATE</p><h2>新增风险项</h2><p>风险会进入治理登记表，供团队后续分配负责人和缓解措施。</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><form class="modal-form" id="risk-form"><div class="form-field"><label for="risk-title">风险名称</label><input id="risk-title" name="title" required placeholder="例如：数据同步延迟导致工单重复" /></div><div class="form-grid"><div class="form-field"><label for="risk-category">类别</label><select id="risk-category" name="category"><option>Infrastructure</option><option>Ethics</option><option>Safety</option><option>Privacy</option><option>Operations</option></select></div><div class="form-field"><label for="risk-level">等级</label><select id="risk-level" name="level"><option value="high">高</option><option value="medium" selected>中</option><option value="low">低</option></select></div></div><div class="form-grid"><div class="form-field"><label for="risk-probability">发生概率</label><select id="risk-probability" name="probability"><option value="1">1 · 很低</option><option value="2">2 · 较低</option><option value="3" selected>3 · 中</option><option value="4">4 · 较高</option><option value="5">5 · 很高</option></select></div><div class="form-field"><label for="risk-impact">影响程度</label><select id="risk-impact" name="impact"><option value="1">1 · 较小</option><option value="2">2 · 轻微</option><option value="3" selected>3 · 中</option><option value="4">4 · 严重</option><option value="5">5 · 关键</option></select></div></div><div class="form-grid"><div class="form-field"><label for="risk-due">复核日期</label><input id="risk-due" name="due" placeholder="例如：本周五" /></div><div class="form-field"><label for="risk-owner">负责人</label><input id="risk-owner" name="owner" required placeholder="例如：治理负责人" /></div></div><div class="form-field"><label for="risk-affected">影响对象</label><input id="risk-affected" name="affected" required placeholder="例如：学生、设施团队、数据管理员" /></div><div class="form-field"><label for="risk-mitigation">缓解措施</label><textarea id="risk-mitigation" name="mitigation" required placeholder="填写一个可执行的预防、监控或恢复措施"></textarea></div><div class="modal-actions"><button class="button secondary" type="button" data-close-modal="true">取消</button><button class="button primary" type="submit">写入风险登记表 <span>→</span></button></div></form>`);
   document.getElementById('risk-form').addEventListener('submit', async event => { event.preventDefault(); if (!requireApi()) return; const body = Object.fromEntries(new FormData(event.currentTarget).entries()); try { const result = await apiRequest('/api/risks', { method: 'POST', body: JSON.stringify(body) }); if (result.queued) { state.risks.unshift({ ...body, id: `OFF-${Date.now()}`, score: Number(body.probability) * Number(body.impact), status: '待同步' }); renderRisks(); } else await loadRisks(); closeModal(); showToast(result.queued ? '风险项已加入离线队列' : '风险项已写入治理登记表'); } catch (error) { handleApiError(error); } });
+}
+
+function openRiskReportModal() {
+  openModal(`<div class="modal-head"><div><p class="panel-kicker">RISK REPORT · HUMAN REVIEW</p><h2>上报一个风险</h2><p>提交后进入可持续管理员和系统管理员的人工审核队列。</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><form class="modal-form" id="risk-report-form"><div class="form-field"><label for="report-title">风险名称</label><input id="report-title" name="title" required placeholder="例如：危险物品被错误发布" /></div><div class="form-grid"><div class="form-field"><label for="report-category">类别</label><select id="report-category" name="category"><option>Infrastructure</option><option>Safety</option><option>Ethics</option><option>Privacy</option><option>Operations</option></select></div><div class="form-field"><label for="report-level">等级</label><select id="report-level" name="level"><option value="high">高</option><option value="medium" selected>中</option><option value="low">低</option></select></div></div><div class="form-grid"><div class="form-field"><label for="report-location">发生地点</label><input id="report-location" name="location" required placeholder="例如：North Residence B" /></div><div class="form-field"><label for="report-affected">影响对象</label><input id="report-affected" name="affected" required placeholder="例如：学生、设施团队" /></div></div><div class="form-field"><label for="report-mitigation">风险描述与建议措施</label><textarea id="report-mitigation" name="mitigation" required placeholder="描述你观察到的风险，以及建议如何预防或缓解"></textarea></div><div class="modal-actions"><button class="button secondary" type="button" data-close-modal="true">取消</button><button class="button primary" type="submit">提交人工审核 <span>→</span></button></div></form>`);
+  document.getElementById('risk-report-form').addEventListener('submit', async event => { event.preventDefault(); if (!requireApi()) return; const body = Object.fromEntries(new FormData(event.currentTarget).entries()); try { await apiRequest('/api/risk-reports', { method: 'POST', body: JSON.stringify(body) }); closeModal(); showToast('风险已上报，等待人工审核'); } catch (error) { handleApiError(error); } });
 }
 
 function openRiskDetailModal(id) {
@@ -489,6 +510,7 @@ document.addEventListener('click', event => {
     if (action.dataset.action === 'open-add-item') openAddItemModal();
     if (action.dataset.action === 'open-work-order' && requireRole(['student','operator','admin'])) openWorkOrderModal();
     if (action.dataset.action === 'open-risk' && requireRole(['sustainability','admin'])) openRiskModal();
+    if (action.dataset.action === 'open-risk-report' && requireRole(['student','operator','sustainability','admin'])) openRiskReportModal();
     if (action.dataset.action === 'open-evidence' && requireRole(['operator','sustainability','admin'])) openEvidenceModal();
     if (action.dataset.action === 'open-access-review') openAccessReview();
     if (action.dataset.action === 'open-route') openRouteModal();
@@ -524,6 +546,7 @@ document.getElementById('login-form').addEventListener('submit', async event => 
 document.querySelectorAll('[data-demo-account]').forEach(button => button.addEventListener('click', () => { const credentials = { student: ['student', 'student123'], operator: ['operator', 'operator123'], operator_jc: ['operator_jc', 'operator123'], operator_ak: ['operator_ak', 'operator123'], sustainability: ['sustainability', 'sustain123'], admin: ['admin', 'admin123'] }[button.dataset.demoAccount]; document.getElementById('login-username').value = credentials[0]; document.getElementById('login-password').value = credentials[1]; }));
 document.getElementById('logout-button').addEventListener('click', async () => { try { await apiRequest('/api/auth/logout', { method: 'POST' }); } catch (_) {} sessionStorage.removeItem('campusloop-token'); state.token = ''; showLogin(); });
 document.addEventListener('click', async event => { const review = event.target.closest('[data-review-item]'); if (!review) return; if (!['operator','admin'].includes(state.user?.role)) return showToast('当前账户没有人工审核权限', 'error'); try { await apiRequest(`/api/items/${encodeURIComponent(review.dataset.reviewItem)}/review`, { method: 'PATCH', body: JSON.stringify({ decision: review.dataset.reviewStatus }) }); await Promise.all([loadItems(), loadModerationQueue(), loadDashboard()]); showToast(review.dataset.reviewStatus === 'approved' ? '资源已通过人工审核' : '资源已驳回'); } catch (error) { handleApiError(error); } });
+document.addEventListener('click', async event => { const review = event.target.closest('[data-review-risk-report]'); if (!review) return; if (!['sustainability','admin'].includes(state.user?.role)) return showToast('当前账户没有风险审核权限', 'error'); try { await apiRequest(`/api/risk-reports/${encodeURIComponent(review.dataset.reviewRiskReport)}/review`, { method: 'PATCH', body: JSON.stringify({ decision: review.dataset.reviewStatus }) }); await Promise.all([loadRisks(), loadRiskReports(), loadDashboard(), loadAudit()]); showToast(review.dataset.reviewStatus === 'approved' ? '风险上报已通过并登记' : '风险上报已驳回'); } catch (error) { handleApiError(error); } });
 document.addEventListener('click', async event => { const saveButton = event.target.closest('[data-save-user]'); if (!saveButton || saveButton.disabled) return; const row = saveButton.closest('[data-user-row]'); const username = row?.dataset.userRow; if (!username || !requireRole(['admin'])) return; const role = row.querySelector('[data-user-role]')?.value; const active = row.querySelector('[data-user-active]')?.checked; const reviewed = row.querySelector('[data-user-review]')?.checked; saveButton.disabled = true; try { const payload = await apiRequest(`/api/users/${encodeURIComponent(username)}`, { method: 'PATCH', body: JSON.stringify({ role, active, reviewed }) }); const index = state.users.findIndex(account => account.username === username); if (index >= 0) state.users[index] = payload.user; await Promise.all([loadAssignees(), loadDashboard(), loadAudit()]); renderUsers(); showToast(`${payload.user.displayName} 的账户目录状态已保存`); } catch (error) { handleApiError(error); saveButton.disabled = false; } });
 document.addEventListener('click', async event => { const saveButton = event.target.closest('[data-access-save]'); if (!saveButton) return; const row = saveButton.closest('[data-access-row]'); const username = row?.dataset.accessRow; if (!username || !requireRole(['admin'])) return; saveButton.disabled = true; try { const reviewed = row.querySelector('[data-access-reviewed]')?.checked; await apiRequest(`/api/users/${encodeURIComponent(username)}`, { method: 'PATCH', body: JSON.stringify({ reviewed }) }); await Promise.all([loadUsers(), loadDashboard(), loadAudit()]); closeModal(); openAccessReview(); showToast('权限复核状态已保存'); } catch (error) { handleApiError(error); saveButton.disabled = false; } });
 document.addEventListener('click', async event => { const refresh = event.target.closest('[data-access-refresh]'); if (!refresh) return; try { await loadUsers(); closeModal(); openAccessReview(); } catch (error) { handleApiError(error); } });

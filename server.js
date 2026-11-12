@@ -21,6 +21,7 @@ const seedStore = {
   meta: { offlineQueue: 3, lastSync: '今天 08:42' },
   userDirectory: users.map(user => ({ username: user.username, role: user.role, displayName: user.displayName, initials: user.initials, active: true, reviewed: user.username !== 'admin', reviewWeight: { student: 5, operator: 5, operator_jc: 5, operator_ak: 4, sustainability: 4, admin: 2 }[user.username] || 1, lastLogin: null })),
   evidence: [],
+  riskReports: [],
   items: [
     { id: 'ITM-1042', name: '木质学习桌', category: '家具', location: 'North Residence B · 1F', status: '待领取', statusKey: 'available', impact: '避免 18 kg 废弃物', emoji: '🪑', owner: '匿名学生', posted: '2 小时前' },
     { id: 'ITM-1038', name: 'Dell 24″ 显示器', category: '电子产品', location: 'Library loading bay', status: '待维修', statusKey: 'repair', impact: '维修后再利用', emoji: '🖥️', owner: 'IT Services', posted: '今天 08:15' },
@@ -58,6 +59,7 @@ async function initStore() {
   store.risks = store.risks.map(risk => ({ ...risk, probability: Number(risk.probability || 3), impact: Number(risk.impact || 3), score: Number(risk.score || 9), due: risk.due || '待确认' }));
   store.auditLog = Array.isArray(store.auditLog) ? store.auditLog : [];
   store.evidence = Array.isArray(store.evidence) ? store.evidence : [];
+  store.riskReports = Array.isArray(store.riskReports) ? store.riskReports : [];
   const defaultDirectory = users.map(user => ({ username: user.username, role: user.role, displayName: user.displayName, initials: user.initials, active: true, reviewed: user.username !== 'admin', reviewWeight: { student: 5, operator: 5, operator_jc: 5, operator_ak: 4, sustainability: 4, admin: 2 }[user.username] || 1, lastLogin: null }));
   store.userDirectory = Array.isArray(store.userDirectory) ? store.userDirectory : defaultDirectory;
   store.userDirectory = users.map(account => {
@@ -192,6 +194,20 @@ async function handleApi(req, res, url) {
     const body = await readJsonBody(req); if (body.person && ['operator','admin'].includes(user.role)) { const nextPerson = normalizedAssignee(body.person, order.person); if (!nextPerson) return sendError(res, 400, 'VALIDATION_ERROR', '负责人必须是启用中的设施运营人员'); order.person = nextPerson; await appendAudit(user, '分配工单负责人', 'WorkOrder', order.id, order.title); } const allowed = ['new', 'progress', 'pickup', 'done']; if (body.status && allowed.includes(body.status)) { const canUpdate = user.role === 'admin' || order.person === user.initials; if (!canUpdate) return sendError(res, 403, 'FORBIDDEN', '只有负责人或管理员可以推进该工单'); order.status = body.status; order.history = [...(order.history || []), { label: { new: '待处理', progress: '处理中', pickup: '待清运', done: '已完成' }[body.status], at: '刚刚', by: user.username }]; await appendAudit(user, '推进工单状态', 'WorkOrder', order.id, order.title); } order.updatedAt = new Date().toISOString(); await persist(); return sendJson(res, 200, { workOrder: order });
   }
   if (req.method === 'GET' && url.pathname === '/api/risks') { if (user.role === 'student') return sendError(res, 403, 'FORBIDDEN', '学生账户不能访问风险后台'); return sendJson(res, 200, { risks: store.risks }); }
+  if (req.method === 'GET' && url.pathname === '/api/risk-reports') { if (!['sustainability','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '只有可持续管理员或系统管理员可以查看风险上报审核队列'); return sendJson(res, 200, { reports: store.riskReports.filter(report => report.status === 'pending') }); }
+  if (req.method === 'POST' && url.pathname === '/api/risk-reports') {
+    const body = await readJsonBody(req); const title = text(body.title); const mitigation = text(body.mitigation); if (!title || !mitigation) return sendError(res, 400, 'VALIDATION_ERROR', '风险名称和建议措施不能为空');
+    const report = { id: nextId('RR', store.riskReports), title, category: text(body.category, 'Operations'), affected: text(body.affected, '待确认'), level: ['high', 'medium', 'low'].includes(body.level) ? body.level : 'medium', probability: Math.min(5, Math.max(1, Number(body.probability || 3))), impact: Math.min(5, Math.max(1, Number(body.impact || 3))), due: text(body.due, '待确认'), mitigation, owner: text(body.owner, '待分配'), location: text(body.location, '待确认地点'), status: 'pending', reportedBy: user.username, reportedByName: user.displayName, createdAt: new Date().toISOString() };
+    store.riskReports.unshift(report); await appendAudit(user, '上报风险', 'RiskReport', report.id, report.title); await persist(); return sendJson(res, 201, { report });
+  }
+  if (req.method === 'PATCH' && segments[0] === 'api' && segments[1] === 'risk-reports' && segments[2] && segments[3] === 'review') {
+    if (!['sustainability','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '只有可持续管理员或系统管理员可以审核风险上报');
+    const report = store.riskReports.find(entry => entry.id === segments[2]); if (!report) return sendError(res, 404, 'NOT_FOUND', '风险上报不存在');
+    if (report.status !== 'pending') return sendError(res, 409, 'INVALID_STATE', '该风险上报已经处理');
+    const body = await readJsonBody(req); const approved = body.decision === 'approved'; report.status = approved ? 'approved' : 'rejected'; report.reviewedBy = user.username; report.reviewReason = text(body.reason);
+    if (approved) { const risk = { id: nextRiskId(store.risks), title: report.title, category: report.category, affected: report.affected, level: report.level, probability: report.probability, impact: report.impact, score: report.probability * report.impact, due: report.due, mitigation: report.mitigation, owner: report.owner, status: '监控中', sourceReportId: report.id, createdAt: new Date().toISOString() }; store.risks.unshift(risk); await appendAudit(user, '通过风险上报', 'Risk', risk.id, risk.title, `来源 ${report.id}`); } else await appendAudit(user, '驳回风险上报', 'RiskReport', report.id, report.title, report.reviewReason);
+    await persist(); return sendJson(res, 200, { report });
+  }
   if (req.method === 'PATCH' && segments[0] === 'api' && segments[1] === 'risks' && segments[2]) {
     if (!['sustainability','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '只有可持续管理员或系统管理员可以更新风险');
     const risk = store.risks.find(entry => entry.id === segments[2]); if (!risk) return sendError(res, 404, 'NOT_FOUND', '风险不存在');
