@@ -323,6 +323,7 @@
       "initials": "MS",
       "active": true,
       "reviewed": true,
+      "reviewWeight": 5,
       "lastLogin": null
     },
     {
@@ -332,6 +333,7 @@
       "initials": "LM",
       "active": true,
       "reviewed": true,
+      "reviewWeight": 5,
       "lastLogin": null
     },
     {
@@ -341,6 +343,7 @@
       "initials": "JC",
       "active": true,
       "reviewed": true,
+      "reviewWeight": 5,
       "lastLogin": null
     },
     {
@@ -350,6 +353,7 @@
       "initials": "AK",
       "active": true,
       "reviewed": true,
+      "reviewWeight": 4,
       "lastLogin": null
     },
     {
@@ -359,6 +363,7 @@
       "initials": "RG",
       "active": true,
       "reviewed": true,
+      "reviewWeight": 4,
       "lastLogin": null
     },
     {
@@ -368,6 +373,7 @@
       "initials": "AA",
       "active": true,
       "reviewed": false,
+      "reviewWeight": 2,
       "lastLogin": null
     }
   ],

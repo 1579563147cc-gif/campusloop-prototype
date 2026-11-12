@@ -248,7 +248,7 @@ function renderDashboard() {
   setText('queue-count', `${Math.min(5, Number(metrics.openOrders || 0) + Number(metrics.pendingItems || 0))} 项`);
   const lifecycleNote = document.getElementById('lifecycle-note-text');
   if (lifecycleNote) lifecycleNote.innerHTML = `当前有 <strong>${escapeHtml(metrics.pendingItems ?? '—')} 件</strong>资源等待审核，已有 <strong>${escapeHtml(metrics.claimedItems ?? '—')} 件</strong>进入预约流转。`;
-  const accessPercent = metrics.accountCount ? Math.round(((metrics.reviewedAccountCount ?? 0) / metrics.accountCount) * 100) : 0;
+  const accessPercent = metrics.reviewPercent ?? (metrics.accountCount ? Math.round(((metrics.reviewedAccountCount ?? 0) / metrics.accountCount) * 100) : 0);
   setText('access-review-percent', `${accessPercent}%`);
   setText('access-review-count', `${metrics.reviewedAccountCount ?? 0} / ${metrics.accountCount ?? 0}`);
   const ring = document.getElementById('access-review-ring');
@@ -454,8 +454,9 @@ function copyText(value, successMessage, fallbackMessage = value) {
 function openAccessReview() {
   if (!requireRole(['admin'])) return;
   const reviewed = state.users.filter(account => account.reviewed).length;
+  const reviewPercent = state.metrics.reviewPercent ?? 0;
   const rows = state.users.map(account => `<div class="access-review-row" data-access-row="${escapeHtml(account.username)}"><div><strong>${escapeHtml(account.displayName)}</strong><small>${escapeHtml(account.username)} · ${escapeHtml(roleLabels[account.role] || account.role)}</small></div><label class="user-review"><input type="checkbox" data-access-reviewed ${account.reviewed ? 'checked' : ''}><span>已复核</span></label><button class="button small primary" data-access-save>保存</button></div>`).join('');
-  openModal(`<div class="modal-head"><div><p class="panel-kicker">ACCESS REVIEW · LIVE DIRECTORY</p><h2>权限复核目录</h2><p id="access-review-modal-summary">当前已复核 ${reviewed} / ${state.users.length} 个账户。</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="access-review-list">${rows}</div><div class="modal-actions"><button class="button secondary" data-close-modal="true">关闭</button><button class="button primary" data-access-refresh>刷新目录 <span>↻</span></button></div>`);
+  openModal(`<div class="modal-head"><div><p class="panel-kicker">ACCESS REVIEW · LIVE DIRECTORY</p><h2>权限复核目录</h2><p id="access-review-modal-summary">当前已复核 ${reviewed} / ${state.users.length} 个账户，权限项完成率 ${reviewPercent}%。</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="access-review-list">${rows}</div><div class="modal-actions"><button class="button secondary" data-close-modal="true">关闭</button><button class="button primary" data-access-refresh>刷新目录 <span>↻</span></button></div>`);
 }
 
 async function syncQueue() {

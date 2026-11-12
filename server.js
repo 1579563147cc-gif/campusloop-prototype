@@ -19,7 +19,7 @@ const users = [
 
 const seedStore = {
   meta: { offlineQueue: 3, lastSync: '今天 08:42' },
-  userDirectory: users.map(user => ({ username: user.username, role: user.role, displayName: user.displayName, initials: user.initials, active: true, reviewed: user.username !== 'admin', lastLogin: null })),
+  userDirectory: users.map(user => ({ username: user.username, role: user.role, displayName: user.displayName, initials: user.initials, active: true, reviewed: user.username !== 'admin', reviewWeight: { student: 5, operator: 5, operator_jc: 5, operator_ak: 4, sustainability: 4, admin: 2 }[user.username] || 1, lastLogin: null })),
   evidence: [],
   items: [
     { id: 'ITM-1042', name: '木质学习桌', category: '家具', location: 'North Residence B · 1F', status: '待领取', statusKey: 'available', impact: '避免 18 kg 废弃物', emoji: '🪑', owner: '匿名学生', posted: '2 小时前' },
@@ -58,11 +58,11 @@ async function initStore() {
   store.risks = store.risks.map(risk => ({ ...risk, probability: Number(risk.probability || 3), impact: Number(risk.impact || 3), score: Number(risk.score || 9), due: risk.due || '待确认' }));
   store.auditLog = Array.isArray(store.auditLog) ? store.auditLog : [];
   store.evidence = Array.isArray(store.evidence) ? store.evidence : [];
-  const defaultDirectory = users.map(user => ({ username: user.username, role: user.role, displayName: user.displayName, initials: user.initials, active: true, reviewed: user.username !== 'admin', lastLogin: null }));
+  const defaultDirectory = users.map(user => ({ username: user.username, role: user.role, displayName: user.displayName, initials: user.initials, active: true, reviewed: user.username !== 'admin', reviewWeight: { student: 5, operator: 5, operator_jc: 5, operator_ak: 4, sustainability: 4, admin: 2 }[user.username] || 1, lastLogin: null }));
   store.userDirectory = Array.isArray(store.userDirectory) ? store.userDirectory : defaultDirectory;
   store.userDirectory = users.map(account => {
     const existing = store.userDirectory.find(entry => entry.username === account.username) || {};
-    return { username: account.username, role: existing.role || account.role, displayName: account.displayName, initials: account.initials, active: existing.active !== false, reviewed: existing.reviewed === undefined ? account.username !== 'admin' : existing.reviewed === true, lastLogin: existing.lastLogin || null };
+    return { username: account.username, role: existing.role || account.role, displayName: account.displayName, initials: account.initials, active: existing.active !== false, reviewed: existing.reviewed === undefined ? account.username !== 'admin' : existing.reviewed === true, reviewWeight: Number(existing.reviewWeight || ({ student: 5, operator: 5, operator_jc: 5, operator_ak: 4, sustainability: 4, admin: 2 }[account.username] || 1)), lastLogin: existing.lastLogin || null };
   });
   await persist();
 }
@@ -133,7 +133,9 @@ async function handleApi(req, res, url) {
     const claimedItems = store.items.filter(item => item.statusKey === 'donation' || item.status === '已预约').length;
     const activeAccountCount = store.userDirectory.filter(entry => entry.active !== false).length;
     const reviewedAccountCount = store.userDirectory.filter(entry => entry.reviewed === true).length;
-    return sendJson(res, 200, { metrics: { activeItems, pendingItems: store.items.filter(item => item.status === '待审核').length, claimedItems, openOrders: visibleOrders.filter(order => order.status !== 'done').length, completedOrders: visibleOrders.filter(order => order.status === 'done').length, risks: store.risks.length, offlineQueue: store.meta.offlineQueue, lastSync: store.meta.lastSync, reuseRate: Number(((claimedItems / Math.max(activeItems, 1)) * 100).toFixed(1)), avoidedKg: claimedItems * 12, accountCount: store.userDirectory.length, activeAccountCount, reviewedAccountCount } });
+    const reviewTotal = store.userDirectory.reduce((sum, entry) => sum + entry.reviewWeight, 0);
+    const reviewCompleted = store.userDirectory.filter(entry => entry.reviewed === true).reduce((sum, entry) => sum + entry.reviewWeight, 0);
+    return sendJson(res, 200, { metrics: { activeItems, pendingItems: store.items.filter(item => item.status === '待审核').length, claimedItems, openOrders: visibleOrders.filter(order => order.status !== 'done').length, completedOrders: visibleOrders.filter(order => order.status === 'done').length, risks: store.risks.length, offlineQueue: store.meta.offlineQueue, lastSync: store.meta.lastSync, reuseRate: Number(((claimedItems / Math.max(activeItems, 1)) * 100).toFixed(1)), avoidedKg: claimedItems * 12, accountCount: store.userDirectory.length, activeAccountCount, reviewedAccountCount, reviewCompleted, reviewTotal, reviewPercent: Math.round((reviewCompleted / Math.max(reviewTotal, 1)) * 100) } });
   }
   if (req.method === 'GET' && segments[0] === 'api' && segments[1] === 'items') {
     const filter = url.searchParams.get('filter'); const query = (url.searchParams.get('search') || '').toLowerCase();
