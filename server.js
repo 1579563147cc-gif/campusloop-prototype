@@ -139,6 +139,18 @@ async function handleApi(req, res, url) {
     const reviewCompleted = store.userDirectory.filter(entry => entry.reviewed === true).reduce((sum, entry) => sum + entry.reviewWeight, 0);
     return sendJson(res, 200, { metrics: { activeItems, pendingItems: store.items.filter(item => item.status === '待审核').length, claimedItems, openOrders: visibleOrders.filter(order => order.status !== 'done').length, completedOrders: visibleOrders.filter(order => order.status === 'done').length, risks: store.risks.length, offlineQueue: store.meta.offlineQueue, lastSync: store.meta.lastSync, reuseRate: Number(((claimedItems / Math.max(activeItems, 1)) * 100).toFixed(1)), avoidedKg: claimedItems * 12, accountCount: store.userDirectory.length, activeAccountCount, reviewedAccountCount, reviewCompleted, reviewTotal, reviewPercent: Math.round((reviewCompleted / Math.max(reviewTotal, 1)) * 100) } });
   }
+  if (req.method === 'GET' && url.pathname === '/api/review-center') {
+    if (user.role === 'student') return sendError(res, 403, 'FORBIDDEN', '学生账户不能访问审核中心');
+    return sendJson(res, 200, { resources: ['operator','admin'].includes(user.role) ? store.items.filter(item => item.status === '待审核') : [], riskReports: ['sustainability','admin'].includes(user.role) ? store.riskReports.filter(report => report.status === 'pending') : [], workOrders: ['operator','admin'].includes(user.role) ? store.workOrders.filter(order => order.person === 'UNASSIGNED' || (order.status !== 'done' && /逾期|昨天|超时/.test(order.due || ''))) : [] });
+  }
+  if (req.method === 'GET' && url.pathname === '/api/todos') {
+    const todos = [];
+    if (user.role === 'student') { store.items.filter(item => item.ownerUsername === user.username && item.status === '待审核').forEach(item => todos.push({ id: item.id, kind: 'resource', title: `等待审核：${item.name}`, meta: '资源交换', target: 'exchange', priority: 'normal' })); store.riskReports.filter(report => report.reportedBy === user.username && report.status === 'pending').forEach(report => todos.push({ id: report.id, kind: 'risk', title: `等待审核：${report.title}`, meta: '风险上报', target: 'overview', priority: 'normal' })); }
+    if (user.role === 'operator') { store.items.filter(item => item.status === '待审核').forEach(item => todos.push({ id: item.id, kind: 'resource', title: `审核资源：${item.name}`, meta: `${item.category} · ${item.location}`, target: 'governance', priority: 'high' })); store.workOrders.filter(order => order.person === 'UNASSIGNED' || (order.person === user.initials && order.status !== 'done')).slice(0, 5).forEach(order => todos.push({ id: order.id, kind: 'workOrder', title: order.person === 'UNASSIGNED' ? `分配工单：${order.title}` : `跟进工单：${order.title}`, meta: `${order.area} · ${order.due}`, target: 'operations', priority: order.priority === '高' ? 'high' : 'normal' })); }
+    if (user.role === 'sustainability') { store.riskReports.filter(report => report.status === 'pending').forEach(report => todos.push({ id: report.id, kind: 'risk', title: `审核风险：${report.title}`, meta: `${report.category} · ${report.location}`, target: 'governance', priority: report.level === 'high' ? 'high' : 'normal' })); }
+    if (user.role === 'admin') { store.items.filter(item => item.status === '待审核').forEach(item => todos.push({ id: item.id, kind: 'resource', title: `审核资源：${item.name}`, meta: `${item.category} · ${item.location}`, target: 'governance', priority: 'high' })); store.riskReports.filter(report => report.status === 'pending').forEach(report => todos.push({ id: report.id, kind: 'risk', title: `审核风险：${report.title}`, meta: `${report.category} · ${report.location}`, target: 'governance', priority: 'high' })); store.userDirectory.filter(entry => entry.reviewed !== true).forEach(entry => todos.push({ id: entry.username, kind: 'user', title: `复核账户：${entry.displayName}`, meta: `${entry.username} · 权限目录`, target: 'governance', priority: 'normal' })); }
+    return sendJson(res, 200, { todos: todos.slice(0, 12) });
+  }
   if (req.method === 'GET' && segments[0] === 'api' && segments[1] === 'items') {
     const filter = url.searchParams.get('filter'); const query = (url.searchParams.get('search') || '').toLowerCase();
     return sendJson(res, 200, { items: store.items.filter(item => (!filter || filter === 'all' || item.statusKey === filter) && (!query || `${item.name} ${item.category} ${item.location} ${item.id}`.toLowerCase().includes(query))) });
@@ -228,6 +240,10 @@ async function handleApi(req, res, url) {
     store.evidence.unshift(evidence); await appendAudit(user, '录入研究证据', 'Evidence', evidence.id, evidence.title); await persist(); return sendJson(res, 201, { evidence });
   }
   if (req.method === 'POST' && url.pathname === '/api/sync') { store.meta.offlineQueue = 0; store.meta.lastSync = new Date().toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' }); await persist(); return sendJson(res, 200, { synced: true, meta: store.meta }); }
+  if (req.method === 'POST' && url.pathname === '/api/admin/reset-demo') {
+    if (user.role !== 'admin') return sendError(res, 403, 'FORBIDDEN', '只有系统管理员可以重置演示数据');
+    store = JSON.parse(JSON.stringify(seedStore)); store.auditLog = []; store.riskReports = []; await appendAudit(user, '重置演示数据', 'System', 'demo', '演示数据'); await persist(); return sendJson(res, 200, { ok: true, message: '演示数据已重置' });
+  }
   return sendError(res, 404, 'NOT_FOUND', 'API 路径不存在');
 }
 
