@@ -255,7 +255,7 @@ function renderModerationQueue(items) {
   const count = document.getElementById('moderation-count');
   if (!list || !count) return;
   count.textContent = `${items.length} 项`;
-  if (!items.length) { list.innerHTML = '<p class="empty-inline">当前没有待人工审核资源。</p>'; return; }
+  if (!items.length) { list.innerHTML = '<div class="moderation-empty"><p class="empty-inline">当前没有待人工审核资源。</p><button class="button small secondary" data-action="open-add-item">新建一条待审核资源</button></div>'; return; }
   list.innerHTML = items.map(item => `<div class="moderation-row"><div><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.category)} · ${escapeHtml(item.location)} · ${escapeHtml(item.id)}</span></div><div class="moderation-actions"><button class="button small secondary" data-review-item="${escapeHtml(item.id)}" data-review-status="rejected">驳回</button><button class="button small primary" data-review-item="${escapeHtml(item.id)}" data-review-status="approved">通过</button></div></div>`).join('');
 }
 
@@ -289,7 +289,7 @@ function renderDashboard() {
   setText('overview-published-items', metrics.activeItems ?? '—');
   setText('overview-pending-items', metrics.pendingItems ?? '—');
   setText('overview-claimed-items', metrics.claimedItems ?? '—');
-  setText('overview-completed-orders', metrics.completedOrders ?? '—');
+  setText('overview-completed-orders', metrics.completedReuseItems ?? metrics.completedOrders ?? '—');
   setText('ops-open-orders', metrics.openOrders ?? '—');
   setText('ops-overdue-orders', metrics.overdueOrders ?? '—');
   setText('ops-pickup-sites', metrics.pickupSites ?? '—');
@@ -462,6 +462,8 @@ function itemEmoji(item) {
 function renderItems() {
   const grid = document.getElementById('item-grid');
   if (!grid) return;
+  const filterCounts = { all: state.items.length, available: state.items.filter(item => item.statusKey === 'available').length, repair: state.items.filter(item => ['repair', 'repair_in_progress'].includes(item.statusKey)).length, donation: state.items.filter(item => item.statusKey === 'donation').length };
+  document.querySelectorAll('.segment[data-filter]').forEach(button => { const count = button.querySelector('b'); if (count) count.textContent = filterCounts[button.dataset.filter] ?? 0; });
   if (!state.items.length) {
     grid.innerHTML = `<div class="empty-state"><strong>${state.apiOnline ? '没有找到匹配的资源' : '等待后端数据'}</strong><p>${state.apiOnline ? '可以换一个关键词，或清除当前筛选。' : '运行 node server.js 后刷新页面。'}</p></div>`;
     return;
@@ -554,12 +556,26 @@ function openAddItemModal() {
   document.getElementById('add-item-form').addEventListener('submit', async event => { event.preventDefault(); if (!requireApi()) return; const body = Object.fromEntries(new FormData(event.currentTarget).entries()); try { const result = await apiRequest('/api/items', { method: 'POST', body: JSON.stringify(body) }); if (result.queued) { state.items.unshift({ ...body, id: `OFF-${Date.now()}`, status: '待同步', statusKey: 'available', impact: '待估算影响', owner: state.user?.displayName || '当前用户', posted: '刚刚', emoji: body.category === '家具' ? '🪑' : body.category === '电子产品' ? '🖥️' : '📦' }); renderItems(); } else await Promise.all([loadItems(), loadDashboard()]); closeModal(); showToast(result.queued ? '资源已加入离线队列' : '资源已写入后端，等待学生大使审核'); } catch (error) { handleApiError(error); } });
 }
 
+function resourceFlowFor(item) {
+  const status = item.statusKey || 'available';
+  const reviewState = item.status === '待审核' ? 'current' : 'complete';
+  const nodes = [{ label: '资源发布', state: 'complete', owner: item.owner || '发布者', meta: '资源已进入 CampusLoop' }, { label: '人工审核', state: reviewState, owner: item.reviewedByName || '设施运营 / 系统管理员', meta: item.status === '待审核' ? '等待审核分类、地点和安全信息' : '审核节点已完成' }];
+  if (status === 'repair' || status === 'repair_in_progress') nodes.push({ label: status === 'repair_in_progress' ? '维修处理中' : '待认领维修', state: status === 'repair_in_progress' ? 'current' : 'pending', owner: item.claimedByName || '设施运营人员', meta: status === 'repair_in_progress' ? '维修人员已接手处理' : '等待维修清运人员认领' });
+  else if (status === 'completed') nodes.push({ label: '已完成再利用', state: 'complete', owner: item.completedByName || '设施运营团队', meta: '已计入再利用率和避免填埋量' });
+  else if (status === 'reserved') nodes.push({ label: '已预约领取', state: 'current', owner: item.claimedByName || '领取学生', meta: '请按领取地点完成交接' });
+  else if (status === 'donation') nodes.push({ label: '待捐赠流转', state: 'current', owner: '学生大使 / 设施运营', meta: '等待下一次校园使用' });
+  else nodes.push({ label: '待领取', state: status === 'available' ? 'current' : 'pending', owner: '领取学生', meta: status === 'available' ? '可在指定地点预约领取' : '等待审核完成' });
+  return nodes;
+}
+
 function openItemModal(id) {
   const item = state.items.find(entry => entry.id === id); if (!item) return;
-  const lifecycle = item.history || [{ label: '已发布', at: item.posted }, { label: item.status, at: '当前状态' }];
-  const timeline = lifecycle.map((step, index) => `<div class="timeline-step ${index === lifecycle.length - 1 ? 'current' : 'complete'}"><span class="timeline-dot"></span><div><strong>${escapeHtml(step.label)}</strong><small>${escapeHtml(step.at || '')}</small></div></div>`).join('');
-  openModal(`<div class="modal-head"><div><p class="panel-kicker">RESOURCE DETAIL · ${escapeHtml(item.id)}</p><h2>资源详情</h2></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="detail-hero"><span class="item-emoji">${itemEmoji(item)}</span><div class="detail-meta"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.category)} · ${escapeHtml(item.status)}</span></div></div><div class="detail-list"><div><span>领取地点</span><span>${escapeHtml(item.location)}</span></div><div><span>发布者</span><span>${escapeHtml(item.owner)}</span></div><div><span>循环价值</span><span class="green-text">${escapeHtml(item.impact)}</span></div><div><span>更新时间</span><span>${escapeHtml(item.posted)}</span></div></div><div class="timeline"><p class="panel-kicker">LIFECYCLE AUDIT</p>${timeline}</div><div class="modal-actions"><button class="button secondary" data-close-modal="true">关闭</button><button class="button primary" id="claim-item">${item.statusKey === 'available' ? '预约领取' : '关注状态'} <span>→</span></button></div>`);
-  document.getElementById('claim-item').addEventListener('click', async () => { if (item.statusKey !== 'available') { closeModal(); showToast('已加入状态提醒'); return; } if (!requireApi()) return; try { await apiRequest(`/api/items/${encodeURIComponent(item.id)}`, { method: 'PATCH', body: JSON.stringify({ action: 'claim' }) }); closeModal(); await Promise.all([loadItems(), loadDashboard()]); showToast(`已预约“${item.name}”，请在领取时间内完成扫码`); } catch (error) { handleApiError(error); } });
+  const resourceTimeline = resourceFlowFor(item).map((step, index) => `<div class="timeline-step ${step.state === 'pending' ? '' : step.state === 'current' ? 'current' : 'complete'}"><span class="timeline-dot"></span><div><strong>${escapeHtml(step.label)}</strong><small>负责人：${escapeHtml(step.owner)} · ${escapeHtml(step.meta)}</small></div></div>`).join('');
+  const canOperate = ['operator', 'admin'].includes(state.user?.role); const action = item.statusKey === 'available' ? { id: 'claim-item', label: '预约领取', action: 'claim', tone: 'primary' } : item.statusKey === 'repair' && canOperate ? { id: 'claim-item', label: '认领维修', action: 'claim_repair', tone: 'primary' } : item.statusKey === 'repair_in_progress' && canOperate ? { id: 'claim-item', label: '完成维修并开放领取', action: 'complete_repair', tone: 'primary' } : ['reserved', 'donation'].includes(item.statusKey) && canOperate ? { id: 'claim-item', label: '登记完成再利用', action: 'complete_reuse', tone: 'primary' } : item.statusKey === 'completed' ? { id: 'claim-item', label: '已完成再利用', action: null, tone: 'secondary' } : { id: 'claim-item', label: '查看处理进度', action: null, tone: 'secondary' };
+  const claimed = item.claimedByName ? `<div><span>当前处理人</span><span>${escapeHtml(item.claimedByName)}</span></div>` : '';
+  const publishAction = state.user?.role === 'student' && ['donation', 'completed'].includes(item.statusKey) ? '<button class="button secondary" data-action="open-add-item">发布/捐赠我的资源</button>' : '';
+  openModal(`<div class="modal-head"><div><p class="panel-kicker">RESOURCE DETAIL · ${escapeHtml(item.id)}</p><h2>资源详情与流转</h2></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="detail-hero"><span class="item-emoji">${itemEmoji(item)}</span><div class="detail-meta"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.category)} · ${escapeHtml(item.status)}</span></div></div><div class="resource-location-card"><span class="resource-location-icon">⌖</span><div><strong>领取/交接地点</strong><span>${escapeHtml(item.location)}</span><small>${item.statusKey === 'available' ? '可预约后按地点领取' : item.statusKey === 'repair_in_progress' ? '维修完成后恢复领取' : '按当前流程节点处理'}</small></div></div><div class="detail-list"><div><span>发布者</span><span>${escapeHtml(item.owner)}</span></div>${claimed}<div><span>循环价值</span><span class="green-text">${escapeHtml(item.impact)}</span></div><div><span>更新时间</span><span>${escapeHtml(item.updatedAt || item.posted)}</span></div></div><div class="timeline"><p class="panel-kicker">RESOURCE LIFECYCLE</p>${resourceTimeline}</div><div class="modal-actions">${publishAction}<button class="button secondary" data-close-modal="true">关闭</button><button class="button ${action.tone}" id="claim-item" ${action.action ? '' : 'disabled'}>${action.label} <span>→</span></button></div>`);
+  document.getElementById('claim-item').addEventListener('click', async () => { if (!action.action) return; if (!requireApi()) return; try { await apiRequest(`/api/items/${encodeURIComponent(item.id)}`, { method: 'PATCH', body: JSON.stringify({ action: action.action }) }); closeModal(); await Promise.all([loadItems(), loadDashboard(), loadStudentProgress(), loadNotifications()]); showToast(action.action === 'claim' ? `已预约“${item.name}”，请按地点领取` : action.action === 'claim_repair' ? `已认领“${item.name}”维修任务` : action.action === 'complete_repair' ? '维修已完成，资源重新开放领取' : '已登记完成再利用，指标已更新'); } catch (error) { handleApiError(error); } });
 }
 
 function openWorkOrderModal() {
