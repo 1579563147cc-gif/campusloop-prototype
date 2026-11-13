@@ -744,13 +744,16 @@ body::before {
 .student-progress-copy strong, .student-progress-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .student-progress-copy strong { font-size: 11px; }
 .student-progress-copy small { margin-top: 3px; color: #9596a1; font-size: 9px; }
-.student-progress-state { display: grid; gap: 6px; min-width: 0; }
+.student-progress-state { display: grid; gap: 4px; min-width: 0; }
 .student-progress-state > strong { color: #6553bd; font-size: 9px; }
+.student-progress-state > small { overflow: hidden; color: #9293a1; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .student-progress-track { height: 6px; overflow: hidden; border-radius: 99px; background: #ececf3; }
 .student-progress-track i { display: block; height: 100%; border-radius: inherit; background: var(--purple); box-shadow: 0 0 10px rgba(118,89,246,.25); }
 .student-progress-track i.blue { background: var(--blue); }.student-progress-track i.amber { background: var(--amber); }.student-progress-track i.green { background: var(--teal); }.student-progress-track i.red { background: var(--red); }
 .student-progress-arrow { color: #aaa2d5; font-size: 17px; transition: .2s ease; }
 .student-progress-row:hover .student-progress-arrow { color: var(--purple); transform: translateX(3px); }
+.student-progress-detail { padding: 6px 8px; border: 1px solid rgba(118,89,246,.18); border-radius: 8px; color: #6553bd; background: rgba(238,234,255,.7); font-size: 9px; font-weight: 800; white-space: nowrap; }
+.student-progress-row:hover .student-progress-detail { color: #fff; border-color: var(--purple); background: var(--purple); }
 .student-progress-empty { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px dashed rgba(118,89,246,.22); border-radius: 13px; color: #77798d; background: rgba(248,247,255,.7); }
 .student-progress-empty-icon { width: 34px; height: 34px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 11px; color: var(--purple); background: var(--purple-soft); font-size: 18px; }
 .student-progress-empty strong { display: block; color: var(--ink); font-size: 11px; }
@@ -758,4 +761,25 @@ body::before {
 .student-progress-empty-actions { display: flex; gap: 7px; margin-left: auto; }
 @media (max-width: 760px) { .student-progress-row { grid-template-columns: auto minmax(0, 1fr) auto; }.student-progress-state { grid-column: 2 / 3; }.student-progress-arrow { grid-column: 3; grid-row: 1 / span 2; }.student-progress-empty { align-items: flex-start; flex-wrap: wrap; }.student-progress-empty-actions { width: 100%; margin-left: 46px; }.student-progress-empty-actions .button { flex: 1; } }
 @media (max-width: 480px) { .student-progress-row { grid-template-columns: auto minmax(0, 1fr) auto; padding: 11px 9px; }.student-progress-empty-actions { margin-left: 0; } }
+.student-current-node { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; padding: 15px; border: 1px solid rgba(118,89,246,.16); border-radius: 14px; background: linear-gradient(110deg, #f4f0ff, #eefaf7); }
+.student-current-node > div { display: grid; gap: 4px; }
+.student-current-node span { color: #8b87a9; font-size: 9px; }
+.student-current-node strong { color: #4d3aaf; font-size: 13px; }
+.student-current-node.rejected { border-color: rgba(223,101,122,.22); background: linear-gradient(110deg, #fff1f4, #fff8ef); }
+.student-current-node.rejected strong { color: #c55c70; }
+.student-flow { display: grid; gap: 0; padding: 4px 3px 8px; }
+.student-flow-node { display: grid; grid-template-columns: 35px 1fr; gap: 12px; min-height: 76px; position: relative; }
+.student-flow-node:not(:last-child)::after { content: ''; position: absolute; left: 16px; top: 34px; bottom: -2px; width: 2px; background: #e2e0ee; }
+.student-flow-index { width: 32px; height: 32px; display: grid; place-items: center; position: relative; z-index: 1; border: 1px solid #dedbea; border-radius: 11px; color: #9b98ad; background: #f7f6fb; font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 700; }
+.student-flow-node.complete .student-flow-index { color: #148d76; border-color: #bfe8dd; background: #e8faf5; }
+.student-flow-node.current .student-flow-index { color: #5d48d0; border-color: #cfc5ff; background: #eeeaff; box-shadow: 0 0 0 5px rgba(118,89,246,.1); }
+.student-flow-node.rejected .student-flow-index { color: #c55c70; border-color: #f0c5ce; background: #fff0f3; }
+.student-flow-copy { padding: 2px 0 14px; }
+.student-flow-copy > div { display: flex; align-items: center; gap: 8px; }
+.student-flow-copy strong { color: var(--ink); font-size: 12px; }
+.student-flow-state { padding: 3px 6px; border-radius: 6px; color: #9b98ad; background: #f4f3f8; font-size: 8px; font-weight: 800; }
+.student-flow-node.current .student-flow-state { color: #5d48d0; background: #eeeaff; }.student-flow-node.complete .student-flow-state { color: #148d76; background: #e8faf5; }.student-flow-node.rejected .student-flow-state { color: #c55c70; background: #fff0f3; }
+.student-flow-copy small { display: block; margin-top: 5px; color: #78798b; font-size: 9px; }
+.student-flow-copy p { margin: 4px 0 0; color: #a0a1ad; font-size: 9px; line-height: 1.45; }
+@media (max-width: 480px) { .student-current-node { grid-template-columns: 1fr; }.student-progress-detail { display: none; } }
 
