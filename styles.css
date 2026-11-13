@@ -818,3 +818,8 @@ body::before {
 .release-note-panel h2 { margin: 2px 0 4px; font-size: 15px; color: #40328f; }.release-note-panel p:last-child { margin: 0; color: #7d7d94; font-size: 10px; }.release-note-panel .button { flex: 0 0 auto; }
 @media (max-width: 640px) { .release-note-panel { align-items: flex-start; flex-direction: column; }.release-note-panel .button { width: 100%; } }
 
+.item-status.reserved { color: #5c65c6; }.item-status.repair_in_progress { color: #bd7a1c; }.item-status.completed { color: #178a70; }
+.resource-location-card { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding: 12px 13px; border: 1px solid rgba(32,189,167,.18); border-radius: 12px; background: linear-gradient(100deg, #eafbf7, #f5f2ff); }
+.resource-location-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 9px; color: #178a70; background: #d9f6ee; font-size: 15px; }
+.resource-location-card div { display: grid; gap: 2px; }.resource-location-card strong { color: #3c3e58; font-size: 10px; }.resource-location-card span, .resource-location-card small { color: #77798d; font-size: 9px; }.resource-location-card small { color: #178a70; }
+
