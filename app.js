@@ -431,9 +431,10 @@ function renderReviewCenter() {
   count.textContent = `${total} 项待处理`;
   const activeTab = document.querySelector('[data-review-tab].active')?.dataset.reviewTab || 'all';
   const entries = [];
-  if (activeTab === 'all' || activeTab === 'resources') state.reviewCenter.resources.forEach(item => entries.push(`<div class="review-center-row"><div><strong>资源审核 · ${escapeHtml(item.name)}</strong><small>${escapeHtml(item.category)} · ${escapeHtml(item.location)} · ${escapeHtml(item.id)}</small></div><div class="review-center-actions"><button class="button small secondary" data-review-item="${escapeHtml(item.id)}" data-review-status="rejected">驳回</button><button class="button small primary" data-review-item="${escapeHtml(item.id)}" data-review-status="approved">通过</button></div></div>`));
-  if (activeTab === 'all' || activeTab === 'risks') state.reviewCenter.riskReports.forEach(report => entries.push(`<div class="review-center-row"><div><strong>风险审核 · ${escapeHtml(report.title)}</strong><small>${escapeHtml(report.category)} · ${escapeHtml(report.location)} · ${escapeHtml(report.reportedByName || report.reportedBy)}</small></div><div class="review-center-actions"><button class="button small secondary" data-review-risk-report="${escapeHtml(report.id)}" data-review-status="rejected">驳回</button><button class="button small primary" data-review-risk-report="${escapeHtml(report.id)}" data-review-status="approved">通过并登记</button></div></div>`));
-  if (activeTab === 'all' || activeTab === 'workOrders') state.reviewCenter.workOrders.forEach(order => entries.push(`<div class="review-center-row"><div><strong>工单跟进 · ${escapeHtml(order.title)}</strong><small>${escapeHtml(order.area)} · ${escapeHtml(order.due)} · ${escapeHtml(order.id)}</small></div><button class="button small primary" data-page-jump="operations">打开工单</button></div>`));
+  const summaryRow = (kind, title, detail, action, label) => `<div class="review-center-row review-summary-row"><div><span class="review-summary-kind">${escapeHtml(kind)}</span><strong>${escapeHtml(title)}</strong><small>${escapeHtml(detail)}</small></div><button class="button small ${action === 'operations' ? 'secondary' : 'primary'}" data-action="${escapeHtml(action)}">${escapeHtml(label)} <span>→</span></button></div>`;
+  if (activeTab === 'all' || activeTab === 'resources') entries.push(summaryRow('RESOURCE MODERATION', `${state.reviewCenter.resources.length} 条资源等待审核`, '处理资源名称、分类、地点和领取信息', 'focus-moderation', '定位资源队列'));
+  if (activeTab === 'all' || activeTab === 'risks') entries.push(summaryRow('RISK REPORT MODERATION', `${state.reviewCenter.riskReports.length} 条风险上报等待审核`, '通过后才会写入正式风险登记表', 'focus-risk-reports', '定位风险队列'));
+  if (activeTab === 'all' || activeTab === 'workOrders') entries.push(summaryRow('WORK ORDER FOLLOW-UP', `${state.reviewCenter.workOrders.length} 项工单需要跟进`, '未分配或已超过截止时间的设施工单', 'open-operations', '打开工单看板'));
   list.innerHTML = entries.length ? entries.join('') : '<p class="empty-inline">当前分类没有待处理事项。</p>';
 }
 
@@ -443,6 +444,16 @@ function openModal(content) {
 }
 
 function closeModal() { modalRoot.setAttribute('aria-hidden', 'true'); modalRoot.innerHTML = ''; document.body.style.overflow = ''; }
+
+function focusPanel(id, message) {
+  const panel = document.getElementById(id);
+  if (!panel) return;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  panel.classList.remove('panel-focus');
+  window.setTimeout(() => panel.classList.add('panel-focus'), 220);
+  window.setTimeout(() => panel.classList.remove('panel-focus'), 1900);
+  showToast(message);
+}
 
 function openAddItemModal() {
   openModal(`<div class="modal-head"><div><p class="panel-kicker">NEW RESOURCE · API CREATE</p><h2>发布一件资源</h2><p>提交后会写入后端数据文件，并进入人工审核队列。</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><form class="modal-form" id="add-item-form"><div class="form-field"><label for="item-name">资源名称</label><input id="item-name" name="name" required placeholder="例如：可折叠学习桌" /></div><div class="form-grid"><div class="form-field"><label for="item-category">分类</label><select id="item-category" name="category"><option>家具</option><option>书籍</option><option>电子产品</option><option>生活用品</option><option>其他</option></select></div><div class="form-field"><label for="item-location">领取地点</label><select id="item-location" name="location"><option>North Residence B · 1F</option><option>Library loading bay</option><option>Student Union · 服务台</option><option>South Residence D · 1F</option></select></div></div><div class="form-field"><label for="item-note">补充说明</label><textarea id="item-note" name="note" placeholder="描述物品状态、领取方式或安全注意事项"></textarea></div><div class="modal-actions"><button class="button secondary" type="button" data-close-modal="true">取消</button><button class="button primary" type="submit">写入后端 <span>→</span></button></div></form>`);
@@ -577,6 +588,10 @@ document.addEventListener('click', event => {
     if (action.dataset.action === 'open-risk-report' && requireRole(['student','operator','sustainability','admin'])) openRiskReportModal();
     if (action.dataset.action === 'open-evidence' && requireRole(['operator','sustainability','admin'])) openEvidenceModal();
     if (action.dataset.action === 'open-access-review') openAccessReview();
+    if (action.dataset.action === 'focus-account-directory' && requireRole(['admin'])) focusPanel('account-directory-panel', '已定位到账户与权限目录');
+    if (action.dataset.action === 'focus-moderation') focusPanel('moderation-panel', '已定位到资源发布审核队列');
+    if (action.dataset.action === 'focus-risk-reports') focusPanel('risk-report-panel', '已定位到风险上报审核队列');
+    if (action.dataset.action === 'open-operations') goToPage('operations');
     if (action.dataset.action === 'reset-demo') openResetDemoModal();
     if (action.dataset.action === 'open-route') openRouteModal();
     if (action.dataset.action === 'copy-route') { const text = 'CampusLoop 今日清运路线：North Residence B 09:30、Library loading bay 10:45、Student Union 11:30、South Residence D 13:00'; copyText(text, '路线摘要已复制', '路线摘要：North Residence B → Library loading bay → Student Union → South Residence D'); }
