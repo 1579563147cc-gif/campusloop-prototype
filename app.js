@@ -12,6 +12,7 @@ const state = {
   studentProgress: { workOrders: [], riskReports: [] },
   risks: [],
   riskReports: [],
+  riskReviewers: [],
   reviewCenter: { resources: [], riskReports: [], workOrders: [] },
   todos: [],
   notifications: [],
@@ -123,7 +124,7 @@ async function login(username, password) {
 
 async function loadAuthenticatedData() {
   setServerStatus('loading', '加载工作空间…');
-  await Promise.all([loadDashboard(), loadTodos(), loadReviewCenter(), loadNotifications(), loadItems(), loadWorkOrders(), loadStudentProgress(), loadRisks(), loadRiskReports(), loadModerationQueue(), loadAudit(), loadUsers(), loadEvidence(), loadAssignees()]);
+  await Promise.all([loadDashboard(), loadTodos(), loadReviewCenter(), loadNotifications(), loadItems(), loadWorkOrders(), loadStudentProgress(), loadRisks(), loadRiskReports(), loadRiskReviewers(), loadModerationQueue(), loadAudit(), loadUsers(), loadEvidence(), loadAssignees()]);
   setServerStatus('online', '已登录 · 后端已连接');
   persistOfflineQueue();
   startLiveRefresh();
@@ -196,7 +197,7 @@ function startLiveRefresh() {
     try {
       if (state.activePage === 'operations') await Promise.all([loadWorkOrders(), loadDashboard()]);
       if (state.activePage === 'overview') await Promise.all([loadDashboard(), loadTodos(), loadNotifications(), loadStudentProgress()]);
-      if (state.activePage === 'governance') await Promise.all([loadRisks(), loadRiskReports(), loadReviewCenter(), loadModerationQueue(), loadAudit(), loadUsers()]);
+      if (state.activePage === 'governance') await Promise.all([loadRisks(), loadRiskReports(), loadRiskReviewers(), loadReviewCenter(), loadModerationQueue(), loadAudit(), loadUsers()]);
     } catch (error) { handleApiError(error); }
   }, 15000);
 }
@@ -212,6 +213,13 @@ async function loadRiskReports() {
   if (!['sustainability', 'admin'].includes(state.user?.role)) return;
   const payload = await apiRequest('/api/risk-reports');
   state.riskReports = payload.reports || [];
+  renderRiskReports();
+}
+
+async function loadRiskReviewers() {
+  if (!['sustainability', 'admin'].includes(state.user?.role)) return;
+  const payload = await apiRequest('/api/risk-reviewers');
+  state.riskReviewers = payload.reviewers || [];
   renderRiskReports();
 }
 
@@ -310,7 +318,7 @@ function studentFlowFor(item, kind) {
     const rejected = item.status === 'rejected';
     return [
       { label: '已提交上报', state: 'complete', owner: item.reportedByName || '你', meta: '学生提交风险信息' },
-      { label: rejected ? '已打回' : approved ? '审核完成' : '人工审核中', state: rejected ? 'rejected' : approved ? 'complete' : 'current', owner: '可持续管理员 / 系统管理员', meta: rejected ? (item.reviewReason || '审核未通过') : approved ? '已通过人工审核' : '等待人工审核处理' },
+      { label: rejected ? '已打回' : approved ? '审核完成' : '人工审核中', state: rejected ? 'rejected' : approved ? 'complete' : 'current', owner: item.reviewerName || '可持续管理员 / 系统管理员', meta: rejected ? (item.reviewReason || '审核未通过') : approved ? '已通过人工审核' : '等待人工审核处理' },
       { label: '风险登记', state: approved ? 'complete' : 'pending', owner: item.owner && item.owner !== '待分配' ? item.owner : '治理负责人 · 待分配', meta: approved ? `已登记 · ${item.formalRiskStatus || '监控中'}` : '审核通过后自动登记' },
       { label: '持续监控', state: approved && item.formalRiskStatus === '监控中' ? 'current' : 'pending', owner: item.owner && item.owner !== '待分配' ? item.owner : '治理负责人 · 待分配', meta: approved ? '根据风险状态持续跟进' : '尚未进入该节点' }
     ];
@@ -420,7 +428,7 @@ function goToPage(page) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (page === 'exchange') loadItems().catch(handleApiError);
   if (page === 'operations') loadWorkOrders().catch(handleApiError);
-  if (page === 'governance') { loadRisks().catch(handleApiError); loadRiskReports().catch(handleApiError); loadModerationQueue().catch(handleApiError); loadAudit().catch(handleApiError); loadUsers().catch(handleApiError); }
+  if (page === 'governance') { loadRisks().catch(handleApiError); loadRiskReports().catch(handleApiError); loadRiskReviewers().catch(handleApiError); loadModerationQueue().catch(handleApiError); loadAudit().catch(handleApiError); loadUsers().catch(handleApiError); }
   if (page === 'evidence') loadEvidence().catch(handleApiError);
 }
 
@@ -481,12 +489,17 @@ function renderRisks() {
   body.innerHTML = state.risks.length ? state.risks.map(risk => `<tr><td><strong>${escapeHtml(risk.title)}</strong><span class="table-sub">${escapeHtml(risk.category)} · ${escapeHtml(risk.id)}</span></td><td>${escapeHtml(risk.affected)}</td><td><span class="risk-label ${riskClass(risk.level)}">${riskLabel(risk.level)}</span></td><td><span class="score-pill ${riskScore(risk) >= 12 ? 'score-high' : riskScore(risk) >= 6 ? 'score-medium' : 'score-low'}">${riskScore(risk)} / 25</span></td><td>${escapeHtml(risk.mitigation)}</td><td>${escapeHtml(risk.owner)}</td><td><button class="risk-status-action ${risk.status === '已缓解' ? 'green-action' : 'amber-action'}" data-risk-id="${escapeHtml(risk.id)}"><span class="risk-status-dot"></span><strong>${escapeHtml(risk.status)}</strong><span class="risk-edit-label">编辑状态&nbsp;↗</span></button></td></tr>`).join('') : '<tr><td colspan="7">暂无风险记录</td></tr>';
 }
 
+function riskReviewerOptions(selected = '') {
+  if (!state.riskReviewers.length) return '<option value="">暂无可用复核人</option>';
+  return '<option value="">选择复核人</option>' + state.riskReviewers.map(reviewer => `<option value="${escapeHtml(reviewer.username)}" ${reviewer.username === selected ? 'selected' : ''}>${escapeHtml(reviewer.displayName)} · ${escapeHtml(roleLabels[reviewer.role] || reviewer.role)}</option>`).join('');
+}
+
 function renderRiskReports() {
   const list = document.getElementById('risk-report-list'); const count = document.getElementById('risk-report-count');
   if (!list || !count) return;
   count.textContent = `${state.riskReports.length} 项待审核`;
   if (!state.riskReports.length) { list.innerHTML = '<p class="empty-inline">当前没有待审核的风险上报。</p>'; return; }
-  list.innerHTML = state.riskReports.map(report => `<div class="risk-report-row"><div class="risk-report-copy"><strong>${escapeHtml(report.title)}</strong><small>${escapeHtml(report.category)} · ${escapeHtml(report.location)} · ${escapeHtml(report.reportedByName || report.reportedBy)}</small><p>${escapeHtml(report.mitigation)}</p></div><div class="risk-report-actions"><button class="button small secondary" data-review-risk-report="${escapeHtml(report.id)}" data-review-status="rejected">驳回</button><button class="button small primary" data-review-risk-report="${escapeHtml(report.id)}" data-review-status="approved">通过并登记</button></div></div>`).join('');
+  list.innerHTML = state.riskReports.map(report => `<div class="risk-report-row" data-risk-report-row="${escapeHtml(report.id)}"><div class="risk-report-copy"><strong>${escapeHtml(report.title)}</strong><small>${escapeHtml(report.category)} · ${escapeHtml(report.location)} · ${escapeHtml(report.reportedByName || report.reportedBy)}</small><p>${escapeHtml(report.mitigation)}</p></div><div class="risk-report-reviewer"><label>复核人</label><select data-risk-reviewer aria-label="${escapeHtml(report.title)} 的复核人">${riskReviewerOptions(report.reviewerUsername)}</select><button class="button small secondary" data-save-risk-reviewer="${escapeHtml(report.id)}">保存</button></div><div class="risk-report-actions"><button class="button small secondary" data-review-risk-report="${escapeHtml(report.id)}" data-review-status="rejected">驳回</button><button class="button small primary" data-review-risk-report="${escapeHtml(report.id)}" data-review-status="approved">通过并登记</button></div></div>`).join('');
 }
 
 function renderTodos() {
@@ -551,9 +564,10 @@ function openOrderModal(id) {
   const order = state.workOrders.find(entry => entry.id === id); if (!order) return;
   const nextStatus = { new: 'progress', progress: 'pickup', pickup: 'done', done: 'done' }[order.status]; const nextLabel = { new: '开始处理', progress: '标记待清运', pickup: '完成工单', done: '已完成' }[order.status]; const statusLabel = { new: '待处理', progress: '处理中', pickup: '待清运', done: '已完成' }[order.status];
   const history = (order.history || [{ label: statusLabel, at: order.due }]).map(step => `<div class="timeline-step complete"><span class="timeline-dot"></span><div><strong>${escapeHtml(step.label)}</strong><small>${escapeHtml(step.at || '')}</small></div></div>`).join('');
-  const assignment = ['operator','admin'].includes(state.user?.role) ? `<div class="form-field inline-assignee"><label for="order-assignee">负责人</label><select id="order-assignee">${assigneeOptions(order.person)}</select></div>` : `<div><span>负责人</span><span>${escapeHtml(order.person)} · Facilities</span></div>`;
+  const assignment = ['operator','admin'].includes(state.user?.role) ? `<div class="form-field inline-assignee"><label for="order-assignee">负责人</label><select id="order-assignee">${assigneeOptions(order.person)}</select><button class="button small secondary" type="button" id="save-order-assignee">保存负责人</button></div>` : `<div><span>负责人</span><span>${escapeHtml(order.person)} · Facilities</span></div>`;
   openModal(`<div class="modal-head"><div><p class="panel-kicker">WORK ORDER · ${escapeHtml(order.id)}</p><h2>${escapeHtml(order.title)}</h2><p>${escapeHtml(order.area)} · ${escapeHtml(order.type)}</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="detail-list"><div><span>当前状态</span><span>${statusLabel}</span></div><div><span>截止时间</span><span>${escapeHtml(order.due)}</span></div><div><span>数量</span><span>${escapeHtml(order.quantity || 1)}</span></div><div><span>优先级</span><span>${escapeHtml(order.priority)}</span></div>${assignment}<div><span>处理说明</span><span>${escapeHtml(order.description || '暂无说明')}</span></div></div><div class="timeline"><p class="panel-kicker">WORK ORDER AUDIT</p>${history}</div><div class="modal-actions"><button class="button secondary" data-close-modal="true">关闭</button><button class="button primary" id="advance-order" ${order.status === 'done' ? 'disabled' : ''}>${nextLabel} <span>→</span></button></div>`);
-  const advance = document.getElementById('advance-order'); if (advance && order.status !== 'done') advance.addEventListener('click', async () => { if (!requireApi()) return; const assignee = document.getElementById('order-assignee')?.value; try { await apiRequest(`/api/work-orders/${encodeURIComponent(order.id)}`, { method: 'PATCH', body: JSON.stringify({ status: nextStatus, person: assignee }) }); closeModal(); await Promise.all([loadWorkOrders(), loadDashboard()]); showToast(`${order.id} 已更新，状态进入下一阶段`); } catch (error) { handleApiError(error); } });
+  const saveAssignee = document.getElementById('save-order-assignee'); if (saveAssignee) saveAssignee.addEventListener('click', async () => { if (!requireApi()) return; const assignee = document.getElementById('order-assignee')?.value; if (!assignee) return showToast('请选择一名设施运营负责人', 'error'); saveAssignee.disabled = true; try { await apiRequest(`/api/work-orders/${encodeURIComponent(order.id)}`, { method: 'PATCH', body: JSON.stringify({ person: assignee }) }); closeModal(); await Promise.all([loadWorkOrders(), loadDashboard(), loadStudentProgress()]); showToast(`${order.id} 已分配给 ${assigneeOptions(assignee).match(/selected[^>]*>([^<]+)/)?.[1] || '设施运营人员'}`); } catch (error) { saveAssignee.disabled = false; handleApiError(error); } });
+  const advance = document.getElementById('advance-order'); if (advance && order.status !== 'done') advance.addEventListener('click', async () => { if (!requireApi()) return; const assignee = document.getElementById('order-assignee')?.value; try { await apiRequest(`/api/work-orders/${encodeURIComponent(order.id)}`, { method: 'PATCH', body: JSON.stringify({ status: nextStatus, person: assignee }) }); closeModal(); await Promise.all([loadWorkOrders(), loadDashboard(), loadStudentProgress()]); showToast(`${order.id} 已更新，状态进入下一阶段`); } catch (error) { handleApiError(error); } });
 }
 
 function openStudentProgressModal(id, kind) {
@@ -713,7 +727,8 @@ document.getElementById('login-form').addEventListener('submit', async event => 
 document.querySelectorAll('[data-demo-account]').forEach(button => button.addEventListener('click', () => { const credentials = { student: ['student', 'student123'], operator: ['operator', 'operator123'], operator_jc: ['operator_jc', 'operator123'], operator_ak: ['operator_ak', 'operator123'], sustainability: ['sustainability', 'sustain123'], admin: ['admin', 'admin123'] }[button.dataset.demoAccount]; document.getElementById('login-username').value = credentials[0]; document.getElementById('login-password').value = credentials[1]; }));
 document.getElementById('logout-button').addEventListener('click', async () => { try { await apiRequest('/api/auth/logout', { method: 'POST' }); } catch (_) {} sessionStorage.removeItem('campusloop-token'); state.token = ''; showLogin(); });
 document.addEventListener('click', async event => { const review = event.target.closest('[data-review-item]'); if (!review) return; if (!['operator','admin'].includes(state.user?.role)) return showToast('当前账户没有人工审核权限', 'error'); try { await apiRequest(`/api/items/${encodeURIComponent(review.dataset.reviewItem)}/review`, { method: 'PATCH', body: JSON.stringify({ decision: review.dataset.reviewStatus }) }); await Promise.all([loadItems(), loadModerationQueue(), loadReviewCenter(), loadDashboard(), loadTodos()]); showToast(review.dataset.reviewStatus === 'approved' ? '资源已通过人工审核' : '资源已驳回'); } catch (error) { handleApiError(error); } });
-document.addEventListener('click', async event => { const review = event.target.closest('[data-review-risk-report]'); if (!review) return; if (!['sustainability','admin'].includes(state.user?.role)) return showToast('当前账户没有风险审核权限', 'error'); try { await apiRequest(`/api/risk-reports/${encodeURIComponent(review.dataset.reviewRiskReport)}/review`, { method: 'PATCH', body: JSON.stringify({ decision: review.dataset.reviewStatus }) }); await Promise.all([loadRisks(), loadRiskReports(), loadReviewCenter(), loadDashboard(), loadTodos(), loadAudit()]); showToast(review.dataset.reviewStatus === 'approved' ? '风险上报已通过并登记' : '风险上报已驳回'); } catch (error) { handleApiError(error); } });
+document.addEventListener('click', async event => { const save = event.target.closest('[data-save-risk-reviewer]'); if (!save) return; if (!['sustainability','admin'].includes(state.user?.role)) return showToast('当前账户没有分配复核人的权限', 'error'); const row = save.closest('[data-risk-report-row]'); const reviewer = row?.querySelector('[data-risk-reviewer]')?.value; if (!reviewer) return showToast('请选择一名复核人', 'error'); save.disabled = true; try { await apiRequest(`/api/risk-reports/${encodeURIComponent(save.dataset.saveRiskReviewer)}/assign`, { method: 'PATCH', body: JSON.stringify({ reviewer }) }); await Promise.all([loadRiskReports(), loadRiskReviewers(), loadReviewCenter(), loadAudit()]); showToast('风险复核人已保存'); } catch (error) { save.disabled = false; handleApiError(error); } });
+document.addEventListener('click', async event => { const review = event.target.closest('[data-review-risk-report]'); if (!review) return; if (!['sustainability','admin'].includes(state.user?.role)) return showToast('当前账户没有风险审核权限', 'error'); const row = review.closest('[data-risk-report-row]'); const reviewer = row?.querySelector('[data-risk-reviewer]')?.value || ''; if (!reviewer) return showToast('请先选择复核人，再处理风险上报', 'error'); try { await apiRequest(`/api/risk-reports/${encodeURIComponent(review.dataset.reviewRiskReport)}/review`, { method: 'PATCH', body: JSON.stringify({ decision: review.dataset.reviewStatus, reviewer }) }); await Promise.all([loadRisks(), loadRiskReports(), loadRiskReviewers(), loadReviewCenter(), loadDashboard(), loadTodos(), loadAudit()]); showToast(review.dataset.reviewStatus === 'approved' ? '风险上报已通过并登记' : '风险上报已驳回'); } catch (error) { handleApiError(error); } });
 document.addEventListener('click', async event => { const saveButton = event.target.closest('[data-save-user]'); if (!saveButton || saveButton.disabled) return; const row = saveButton.closest('[data-user-row]'); const username = row?.dataset.userRow; if (!username || !requireRole(['admin'])) return; const role = row.querySelector('[data-user-role]')?.value; const active = row.querySelector('[data-user-active]')?.checked; const reviewed = row.querySelector('[data-user-review]')?.checked; saveButton.disabled = true; try { const payload = await apiRequest(`/api/users/${encodeURIComponent(username)}`, { method: 'PATCH', body: JSON.stringify({ role, active, reviewed }) }); const index = state.users.findIndex(account => account.username === username); if (index >= 0) state.users[index] = payload.user; await Promise.all([loadAssignees(), loadDashboard(), loadAudit()]); renderUsers(); showToast(`${payload.user.displayName} 的账户目录状态已保存`); } catch (error) { handleApiError(error); saveButton.disabled = false; } });
 document.addEventListener('click', async event => { const saveButton = event.target.closest('[data-access-save]'); if (!saveButton) return; const row = saveButton.closest('[data-access-row]'); const username = row?.dataset.accessRow; if (!username || !requireRole(['admin'])) return; saveButton.disabled = true; try { const reviewed = row.querySelector('[data-access-reviewed]')?.checked; await apiRequest(`/api/users/${encodeURIComponent(username)}`, { method: 'PATCH', body: JSON.stringify({ reviewed }) }); await Promise.all([loadUsers(), loadDashboard(), loadAudit()]); closeModal(); openAccessReview(); showToast('权限复核状态已保存'); } catch (error) { handleApiError(error); saveButton.disabled = false; } });
 document.addEventListener('click', async event => { const refresh = event.target.closest('[data-access-refresh]'); if (!refresh) return; try { await loadUsers(); closeModal(); openAccessReview(); } catch (error) { handleApiError(error); } });
