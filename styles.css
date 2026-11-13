@@ -732,4 +732,30 @@ body::before {
 .review-summary-kind { color: #8075bd; font-family: 'DM Mono', monospace; font-size: 8px; letter-spacing: .12em; }
 .review-summary-row .button { flex: 0 0 auto; }
 .moderation-panel, #risk-report-panel, #account-directory-panel { scroll-margin-top: 104px; }
+.student-progress-panel { margin-bottom: 20px; background: linear-gradient(145deg, rgba(255,255,255,.98), rgba(246,245,255,.92)); }
+.student-progress-panel .panel-helper { margin: 4px 0 0; }
+.student-progress-list { display: grid; gap: 8px; }
+.student-progress-row { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(150px, .45fr) auto; align-items: center; gap: 13px; padding: 13px 12px; border: 1px solid rgba(92,82,155,.1); border-radius: 13px; color: var(--ink); background: rgba(255,255,255,.72); text-align: left; transition: .2s ease; }
+.student-progress-row:hover { border-color: rgba(118,89,246,.3); background: #fff; box-shadow: 0 10px 24px rgba(60,48,140,.08); transform: translateY(-1px); }
+.student-progress-type { min-width: 42px; padding: 5px 7px; border-radius: 7px; font-size: 9px; font-weight: 800; text-align: center; }
+.student-progress-type.facility { color: #4b75c3; background: var(--blue-soft); }
+.student-progress-type.risk { color: #bd7a1c; background: var(--amber-soft); }
+.student-progress-copy { min-width: 0; }
+.student-progress-copy strong, .student-progress-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.student-progress-copy strong { font-size: 11px; }
+.student-progress-copy small { margin-top: 3px; color: #9596a1; font-size: 9px; }
+.student-progress-state { display: grid; gap: 6px; min-width: 0; }
+.student-progress-state > strong { color: #6553bd; font-size: 9px; }
+.student-progress-track { height: 6px; overflow: hidden; border-radius: 99px; background: #ececf3; }
+.student-progress-track i { display: block; height: 100%; border-radius: inherit; background: var(--purple); box-shadow: 0 0 10px rgba(118,89,246,.25); }
+.student-progress-track i.blue { background: var(--blue); }.student-progress-track i.amber { background: var(--amber); }.student-progress-track i.green { background: var(--teal); }.student-progress-track i.red { background: var(--red); }
+.student-progress-arrow { color: #aaa2d5; font-size: 17px; transition: .2s ease; }
+.student-progress-row:hover .student-progress-arrow { color: var(--purple); transform: translateX(3px); }
+.student-progress-empty { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px dashed rgba(118,89,246,.22); border-radius: 13px; color: #77798d; background: rgba(248,247,255,.7); }
+.student-progress-empty-icon { width: 34px; height: 34px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 11px; color: var(--purple); background: var(--purple-soft); font-size: 18px; }
+.student-progress-empty strong { display: block; color: var(--ink); font-size: 11px; }
+.student-progress-empty p { margin: 3px 0 0; color: #9596a1; font-size: 9px; }
+.student-progress-empty-actions { display: flex; gap: 7px; margin-left: auto; }
+@media (max-width: 760px) { .student-progress-row { grid-template-columns: auto minmax(0, 1fr) auto; }.student-progress-state { grid-column: 2 / 3; }.student-progress-arrow { grid-column: 3; grid-row: 1 / span 2; }.student-progress-empty { align-items: flex-start; flex-wrap: wrap; }.student-progress-empty-actions { width: 100%; margin-left: 46px; }.student-progress-empty-actions .button { flex: 1; } }
+@media (max-width: 480px) { .student-progress-row { grid-template-columns: auto minmax(0, 1fr) auto; padding: 11px 9px; }.student-progress-empty-actions { margin-left: 0; } }
 
