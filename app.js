@@ -9,6 +9,7 @@ const state = {
   apiOnline: false,
   items: [],
   workOrders: [],
+  studentProgress: { workOrders: [], riskReports: [] },
   risks: [],
   riskReports: [],
   reviewCenter: { resources: [], riskReports: [], workOrders: [] },
@@ -122,7 +123,7 @@ async function login(username, password) {
 
 async function loadAuthenticatedData() {
   setServerStatus('loading', '加载工作空间…');
-  await Promise.all([loadDashboard(), loadTodos(), loadReviewCenter(), loadNotifications(), loadItems(), loadWorkOrders(), loadRisks(), loadRiskReports(), loadModerationQueue(), loadAudit(), loadUsers(), loadEvidence(), loadAssignees()]);
+  await Promise.all([loadDashboard(), loadTodos(), loadReviewCenter(), loadNotifications(), loadItems(), loadWorkOrders(), loadStudentProgress(), loadRisks(), loadRiskReports(), loadModerationQueue(), loadAudit(), loadUsers(), loadEvidence(), loadAssignees()]);
   setServerStatus('online', '已登录 · 后端已连接');
   persistOfflineQueue();
   startLiveRefresh();
@@ -175,6 +176,13 @@ async function loadWorkOrders() {
   if (updated) updated.textContent = `刚刚更新 ${state.lastOrdersRefresh.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
+async function loadStudentProgress() {
+  if (state.user?.role !== 'student') return;
+  const payload = await apiRequest('/api/my-progress');
+  state.studentProgress = { workOrders: payload.workOrders || [], riskReports: payload.riskReports || [] };
+  renderStudentProgress();
+}
+
 async function loadAssignees() {
   if (!['operator', 'admin'].includes(state.user?.role)) return;
   const payload = await apiRequest('/api/work-order-assignees');
@@ -187,7 +195,7 @@ function startLiveRefresh() {
     if (!state.user || !state.apiOnline) return;
     try {
       if (state.activePage === 'operations') await Promise.all([loadWorkOrders(), loadDashboard()]);
-      if (state.activePage === 'overview') await Promise.all([loadDashboard(), loadTodos(), loadNotifications()]);
+      if (state.activePage === 'overview') await Promise.all([loadDashboard(), loadTodos(), loadNotifications(), loadStudentProgress()]);
       if (state.activePage === 'governance') await Promise.all([loadRisks(), loadRiskReports(), loadReviewCenter(), loadModerationQueue(), loadAudit(), loadUsers()]);
     } catch (error) { handleApiError(error); }
   }, 15000);
@@ -290,6 +298,43 @@ function renderDashboard() {
   setText('access-review-count', `${metrics.reviewedAccountCount ?? 0} / ${metrics.accountCount ?? 0}`);
   const ring = document.getElementById('access-review-ring');
   if (ring) ring.style.background = `conic-gradient(var(--teal) 0 ${accessPercent}%, #e9f4f0 ${accessPercent}% 100%)`;
+}
+
+function studentOrderProgress(order) {
+  const config = {
+    new: { label: '已上报 · 待分配', percent: 25, tone: 'blue' },
+    progress: { label: '处理中', percent: 55, tone: 'purple' },
+    pickup: { label: '待清运', percent: 78, tone: 'amber' },
+    done: { label: '已完成', percent: 100, tone: 'green' }
+  }[order.status] || { label: '处理中', percent: 50, tone: 'purple' };
+  return { kind: 'workOrder', id: order.id, title: order.title, meta: `${order.area} · ${order.due || '截止时间待确认'}`, status: config.label, percent: config.percent, tone: config.tone, item: order };
+}
+
+function studentRiskProgress(report) {
+  const approved = report.status === 'approved';
+  const rejected = report.status === 'rejected';
+  const config = approved
+    ? { label: report.formalRiskStatus ? `已登记 · ${report.formalRiskStatus}` : '已通过 · 登记中', percent: 100, tone: 'green' }
+    : rejected
+      ? { label: '已驳回', percent: 100, tone: 'red' }
+      : { label: '审核中', percent: 48, tone: 'amber' };
+  return { kind: 'riskReport', id: report.id, title: report.title, meta: `${report.category} · ${report.location}`, status: config.label, percent: config.percent, tone: config.tone, item: report };
+}
+
+function renderStudentProgress() {
+  const list = document.getElementById('student-progress-list');
+  const count = document.getElementById('student-progress-count');
+  if (!list || !count || state.user?.role !== 'student') return;
+  const rows = [
+    ...state.studentProgress.workOrders.map(studentOrderProgress),
+    ...state.studentProgress.riskReports.map(studentRiskProgress)
+  ].sort((a, b) => String(b.item.createdAt || '').localeCompare(String(a.item.createdAt || '')));
+  count.textContent = `${rows.length} 条记录`;
+  if (!rows.length) {
+    list.innerHTML = '<div class="student-progress-empty"><span class="student-progress-empty-icon">⌁</span><div><strong>还没有上报记录</strong><p>提交设施问题或风险后，你可以在这里跟踪处理进度。</p></div><div class="student-progress-empty-actions"><button class="button small secondary" data-action="open-work-order">报告设施问题</button><button class="button small primary" data-action="open-risk-report">上报风险</button></div></div>';
+    return;
+  }
+  list.innerHTML = rows.map(row => `<button class="student-progress-row" data-student-progress-id="${escapeHtml(row.id)}" data-student-progress-kind="${escapeHtml(row.kind)}"><span class="student-progress-type ${row.kind === 'riskReport' ? 'risk' : 'facility'}">${row.kind === 'riskReport' ? '风险' : '设施'}</span><span class="student-progress-copy"><strong>${escapeHtml(row.title)}</strong><small>${escapeHtml(row.meta)}</small></span><span class="student-progress-state"><strong>${escapeHtml(row.status)}</strong><span class="student-progress-track"><i class="${row.tone}" style="width:${row.percent}%"></i></span></span><span class="student-progress-arrow">→</span></button>`).join('');
 }
 
 function renderEvidence() {
@@ -472,7 +517,7 @@ function openWorkOrderModal() {
   const isStudent = state.user?.role === 'student';
   const assignmentField = isStudent ? '' : `<div class="form-field"><label for="order-person">负责人</label><select id="order-person" name="person">${assigneeOptions()}</select></div>`;
   openModal(`<div class="modal-head"><div><p class="panel-kicker">${isStudent ? 'FACILITY REPORT · API CREATE' : 'NEW WORK ORDER · API CREATE'}</p><h2>${isStudent ? '报告设施问题' : '新建设施工单'}</h2><p>${isStudent ? '提交后会进入设施运营的待分配队列。' : '新工单会进入“待处理”列，并写入后端数据文件。'}</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><form class="modal-form" id="work-order-form"><div class="form-field"><label for="order-title">${isStudent ? '问题标题' : '工单名称'}</label><input id="order-title" name="title" required placeholder="例如：North Residence B 回收点照明故障" /></div><div class="form-grid"><div class="form-field"><label for="order-area">地点</label><select id="order-area" name="area"><option>North Residence B</option><option>North Residence C</option><option>South Residence D</option><option>Library loading bay</option><option>Student Union</option></select></div><div class="form-field"><label for="order-type">类型</label><select id="order-type" name="type"><option>家具</option><option>电子</option><option>书籍</option><option>维修</option><option>清运</option></select></div></div><div class="form-grid"><div class="form-field"><label for="order-due">截止时间</label><input id="order-due" name="due" required placeholder="今天 16:30" /></div><div class="form-field"><label for="order-priority">优先级</label><select id="order-priority" name="priority"><option>高</option><option selected>中</option><option>低</option></select></div></div><div class="form-grid">${assignmentField}<div class="form-field"><label for="order-quantity">数量</label><input id="order-quantity" name="quantity" type="number" min="1" value="1" /></div></div><div class="form-field"><label for="order-description">${isStudent ? '问题描述' : '处理说明'}</label><textarea id="order-description" name="description" placeholder="填写现场情况、影响范围或安全要求"></textarea></div><div class="modal-actions"><button class="button secondary" type="button" data-close-modal="true">取消</button><button class="button primary" type="submit">${isStudent ? '提交问题' : '创建工单'} <span>→</span></button></div></form>`);
-  document.getElementById('work-order-form').addEventListener('submit', async event => { event.preventDefault(); if (!requireApi()) return; const body = Object.fromEntries(new FormData(event.currentTarget).entries()); try { const result = await apiRequest('/api/work-orders', { method: 'POST', body: JSON.stringify(body) }); if (result.queued) { state.workOrders.unshift({ ...body, id: `OFF-${Date.now()}`, status: 'new', person: body.person || (state.user?.role === 'student' ? 'UNASSIGNED' : 'LM'), priority: body.priority || '中' }); renderKanban(); } else await Promise.all([loadWorkOrders(), loadDashboard()]); closeModal(); showToast(result.queued ? '问题已加入离线队列' : state.user?.role === 'student' ? '问题已提交，设施运营可以看到并分配工单' : '工单已创建，已进入待处理队列'); } catch (error) { handleApiError(error); } });
+  document.getElementById('work-order-form').addEventListener('submit', async event => { event.preventDefault(); if (!requireApi()) return; const body = Object.fromEntries(new FormData(event.currentTarget).entries()); try { const result = await apiRequest('/api/work-orders', { method: 'POST', body: JSON.stringify(body) }); if (result.queued) { state.workOrders.unshift({ ...body, id: `OFF-${Date.now()}`, status: 'new', person: body.person || (state.user?.role === 'student' ? 'UNASSIGNED' : 'LM'), priority: body.priority || '中' }); renderKanban(); } else await Promise.all([loadWorkOrders(), loadStudentProgress(), loadDashboard()]); closeModal(); showToast(result.queued ? '问题已加入离线队列' : state.user?.role === 'student' ? '问题已提交，设施运营可以看到并分配工单' : '工单已创建，已进入待处理队列'); } catch (error) { handleApiError(error); } });
 }
 
 function openOrderModal(id) {
@@ -491,7 +536,7 @@ function openRiskModal() {
 
 function openRiskReportModal() {
   openModal(`<div class="modal-head"><div><p class="panel-kicker">RISK REPORT · HUMAN REVIEW</p><h2>上报一个风险</h2><p>提交后进入可持续管理员和系统管理员的人工审核队列。</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><form class="modal-form" id="risk-report-form"><div class="form-field"><label for="report-title">风险名称</label><input id="report-title" name="title" required placeholder="例如：危险物品被错误发布" /></div><div class="form-grid"><div class="form-field"><label for="report-category">类别</label><select id="report-category" name="category"><option>Infrastructure</option><option>Safety</option><option>Ethics</option><option>Privacy</option><option>Operations</option></select></div><div class="form-field"><label for="report-level">等级</label><select id="report-level" name="level"><option value="high">高</option><option value="medium" selected>中</option><option value="low">低</option></select></div></div><div class="form-grid"><div class="form-field"><label for="report-location">发生地点</label><input id="report-location" name="location" required placeholder="例如：North Residence B" /></div><div class="form-field"><label for="report-affected">影响对象</label><input id="report-affected" name="affected" required placeholder="例如：学生、设施团队" /></div></div><div class="form-field"><label for="report-mitigation">风险描述与建议措施</label><textarea id="report-mitigation" name="mitigation" required placeholder="描述你观察到的风险，以及建议如何预防或缓解"></textarea></div><div class="modal-actions"><button class="button secondary" type="button" data-close-modal="true">取消</button><button class="button primary" type="submit">提交人工审核 <span>→</span></button></div></form>`);
-  document.getElementById('risk-report-form').addEventListener('submit', async event => { event.preventDefault(); if (!requireApi()) return; const body = Object.fromEntries(new FormData(event.currentTarget).entries()); try { await apiRequest('/api/risk-reports', { method: 'POST', body: JSON.stringify(body) }); closeModal(); showToast('风险已上报，等待人工审核'); } catch (error) { handleApiError(error); } });
+  document.getElementById('risk-report-form').addEventListener('submit', async event => { event.preventDefault(); if (!requireApi()) return; const body = Object.fromEntries(new FormData(event.currentTarget).entries()); try { await apiRequest('/api/risk-reports', { method: 'POST', body: JSON.stringify(body) }); await loadStudentProgress(); closeModal(); showToast('风险已上报，等待人工审核'); } catch (error) { handleApiError(error); } });
 }
 
 function openRiskDetailModal(id) {
@@ -614,6 +659,7 @@ document.addEventListener('click', event => {
   const itemButton = event.target.closest('[data-item-id]'); if (itemButton && state.activePage === 'exchange') { openItemModal(itemButton.dataset.itemId); return; }
   const orderButton = event.target.closest('[data-order-id]'); if (orderButton) { openOrderModal(orderButton.dataset.orderId); return; }
   const riskButton = event.target.closest('[data-risk-id]'); if (riskButton) { openRiskDetailModal(riskButton.dataset.riskId); return; }
+  const studentProgress = event.target.closest('[data-student-progress-id]'); if (studentProgress) { openStudentProgressModal(studentProgress.dataset.studentProgressId, studentProgress.dataset.studentProgressKind); return; }
   if (event.target.closest('[data-close-modal]')) closeModal();
 });
 

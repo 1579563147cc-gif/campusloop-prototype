@@ -196,6 +196,14 @@ async function handleApi(req, res, url) {
     const item = store.items.find(entry => entry.id === segments[2]); if (!item) return sendError(res, 404, 'NOT_FOUND', '资源不存在');
     const body = await readJsonBody(req); if (body.action === 'claim') { if (item.statusKey !== 'available') return sendError(res, 409, 'INVALID_STATE', '资源当前不可预约'); item.status = '已预约'; item.statusKey = 'donation'; item.claimedBy = user.username; item.history = [...(item.history || []), { label: '已预约', at: '刚刚', by: user.username }]; await appendAudit(user, '预约资源', 'Resource', item.id, item.name); } else { if (!['operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '只有运营或管理员可以更新资源状态'); if (body.status) { item.status = text(body.status, item.status); item.history = [...(item.history || []), { label: item.status, at: '刚刚', by: user.username }]; await appendAudit(user, '更新资源状态', 'Resource', item.id, item.name); } if (body.statusKey) item.statusKey = text(body.statusKey, item.statusKey); } item.updatedAt = new Date().toISOString(); await persist(); return sendJson(res, 200, { item });
   }
+  if (req.method === 'GET' && url.pathname === '/api/my-progress') {
+    const workOrders = store.workOrders.filter(order => order.createdBy === user.username).map(order => ({ ...order, history: order.history || [] }));
+    const riskReports = store.riskReports.filter(report => report.reportedBy === user.username).map(report => {
+      const formalRisk = store.risks.find(risk => risk.sourceReportId === report.id);
+      return { ...report, history: report.history || [], formalRiskStatus: formalRisk?.status || null };
+    });
+    return sendJson(res, 200, { workOrders, riskReports });
+  }
   if (req.method === 'GET' && url.pathname === '/api/work-orders') { const visible = user.role === 'student' ? [] : user.role === 'operator' ? store.workOrders.filter(order => order.person === user.initials || order.person === user.username || order.person === 'UNASSIGNED') : store.workOrders; return sendJson(res, 200, { workOrders: visible }); }
   if (req.method === 'POST' && url.pathname === '/api/work-orders') {
     if (!['student','operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '当前账户不能创建工单');
