@@ -152,6 +152,11 @@ async function loadReviewCenter() {
 async function loadNotifications() {
   const payload = await apiRequest('/api/notifications');
   state.notifications = payload.notifications || [];
+  const count = document.getElementById('notification-count');
+  const dot = document.querySelector('.notification-dot');
+  const unread = state.notifications.length;
+  if (count) { count.textContent = unread > 99 ? '99+' : String(unread); count.classList.toggle('hidden', unread === 0); }
+  if (dot) dot.classList.toggle('hidden', unread === 0);
 }
 
 async function loadReportCenter() {
@@ -226,7 +231,7 @@ async function loadRiskReviewers() {
 async function loadModerationQueue() {
   if (!['operator', 'admin'].includes(state.user?.role)) return;
   const payload = await apiRequest('/api/moderation/queue');
-  renderModerationQueue(payload.items || []);
+  renderModerationQueue(payload.items || [], payload.handoffs || []);
 }
 
 async function loadAudit() {
@@ -250,13 +255,16 @@ async function loadEvidence() {
   renderEvidence();
 }
 
-function renderModerationQueue(items) {
+function renderModerationQueue(items, handoffs = []) {
   const list = document.getElementById('moderation-list');
   const count = document.getElementById('moderation-count');
   if (!list || !count) return;
-  count.textContent = `${items.length} 项`;
-  if (!items.length) { list.innerHTML = '<div class="moderation-empty"><p class="empty-inline">当前没有待人工审核资源。</p><button class="button small secondary" data-action="open-add-item">新建一条待审核资源</button></div>'; return; }
-  list.innerHTML = items.map(item => `<div class="moderation-row"><div><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.category)} · ${escapeHtml(item.location)} · ${escapeHtml(item.id)}</span></div><div class="moderation-actions"><button class="button small secondary" data-review-item="${escapeHtml(item.id)}" data-review-status="rejected">驳回</button><button class="button small primary" data-review-item="${escapeHtml(item.id)}" data-review-status="approved">通过</button></div></div>`).join('');
+  const total = items.length + handoffs.length;
+  count.textContent = `${total} 项`;
+  if (!total) { list.innerHTML = '<div class="moderation-empty"><p class="empty-inline">当前没有待审核发布或待处理交接任务。</p><button class="button small secondary" data-action="open-add-item">新建一条待审核资源</button></div>'; return; }
+  const resourceRows = items.map(item => `<div class="moderation-row"><div><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.category)} · ${escapeHtml(item.location)} · ${escapeHtml(item.id)}</span></div><div class="moderation-actions"><button class="button small secondary" data-review-item="${escapeHtml(item.id)}" data-review-status="rejected">驳回</button><button class="button small primary" data-review-item="${escapeHtml(item.id)}" data-review-status="approved">通过</button></div></div>`).join('');
+  const handoffRows = handoffs.map(order => `<div class="moderation-row moderation-handoff"><div><strong><span class="moderation-kind">资源交接</span>${escapeHtml(String(order.title || '').replace(/^资源交接：/, ''))}</strong><span>${escapeHtml(order.area || '待确认地点')} · ${escapeHtml(order.due || '待安排')} · ${order.person === 'UNASSIGNED' ? '待分配设施运营负责人' : `负责人 ${escapeHtml(order.person)}`}</span></div><div class="moderation-actions"><button class="button small primary" data-order-id="${escapeHtml(order.id)}">打开交接工单</button></div></div>`).join('');
+  list.innerHTML = resourceRows + handoffRows;
 }
 
 function renderAudit(entries) {
@@ -283,6 +291,7 @@ function setText(id, value) { const element = document.getElementById(id); if (e
 
 function renderDashboard() {
   const metrics = state.metrics || {};
+  setText('nav-resource-count', metrics.activeItems ?? 0);
   setText('overview-active-items', metrics.activeItems ?? '—');
   setText('overview-open-orders', metrics.openOrders ?? '—');
   setText('overview-reuse-rate', `${metrics.reuseRate ?? '—'}%`);
@@ -309,7 +318,8 @@ function renderDashboard() {
   if (ring) ring.style.background = `conic-gradient(var(--teal) 0 ${accessPercent}%, #e9f4f0 ${accessPercent}% 100%)`;
   const averageHours = document.getElementById('ops-average-hours'); if (averageHours) averageHours.innerHTML = `${escapeHtml(metrics.sla?.averageHours ?? '—')}<small>小时</small>`;
   setText('pilot-participation', `${metrics.pilotHealth?.participation ?? '—'}%`); setText('pilot-on-time', `${metrics.pilotHealth?.onTime ?? '—'}%`); setText('pilot-data-completeness', `${metrics.pilotHealth?.dataCompleteness ?? '—'}%`);
-  ['participation', 'onTime', 'dataCompleteness'].forEach(key => { const bar = document.getElementById(`pilot-${key === 'onTime' ? 'on-time' : key}-bar`); if (bar) bar.style.width = `${metrics.pilotHealth?.[key] ?? 0}%`; });
+  const pilotBarIds = { participation: 'pilot-participation-bar', onTime: 'pilot-on-time-bar', dataCompleteness: 'pilot-data-completeness-bar' };
+  Object.entries(pilotBarIds).forEach(([key, id]) => { const bar = document.getElementById(id); if (bar) bar.style.width = `${metrics.pilotHealth?.[key] ?? 0}%`; });
   const bars = [...document.querySelectorAll('#page-overview .bar-group')]; const trend = metrics.trend || []; const maxTrend = Math.max(...trend.map(point => Number(point.value) || 0), 1); bars.forEach((group, index) => { const point = trend[index]; if (!point) return; const value = Number(point.value) || 0; const valueNode = group.querySelector('.bar-value'); const bar = group.querySelector('.bar'); const label = group.querySelector('span:last-child'); if (valueNode) valueNode.textContent = value; if (bar) bar.style.height = `${Math.max(18, Math.round(value / maxTrend * 100))}%`; if (label) label.textContent = point.label; });
   const linePoints = trend.map((point, index) => [index * (720 / Math.max(trend.length - 1, 1)), 220 - ((Number(point.value) || 0) / maxTrend) * 195]); if (linePoints.length > 1) { const linePath = linePoints.map((point, index) => `${index ? 'L' : 'M'}${point[0].toFixed(1)} ${point[1].toFixed(1)}`).join(' '); const areaPath = `${linePath} L720 240 L0 240Z`; document.getElementById('impact-line')?.setAttribute('d', linePath); document.getElementById('impact-area')?.setAttribute('d', areaPath); const end = linePoints[linePoints.length - 1]; document.getElementById('impact-line-end')?.setAttribute('cx', end[0]); document.getElementById('impact-line-end')?.setAttribute('cy', end[1]); }
   const mixKeys = ['furniture', 'books', 'electronics', 'other']; (metrics.mix || []).forEach((entry, index) => { setText(`mix-${mixKeys[index]}`, `${entry.percent}%`); }); const donut = document.getElementById('material-donut'); if (donut && metrics.mix?.length) { let cursor = 0; const colors = ['#7358f4', '#3bbba5', '#f0b24e', '#78a8ef']; donut.style.background = `conic-gradient(${metrics.mix.map((entry, index) => { const start = cursor; cursor += entry.percent; return `${colors[index]} ${start}% ${cursor}%`; }).join(', ')})`; }
@@ -463,6 +473,7 @@ function renderItems() {
   const grid = document.getElementById('item-grid');
   if (!grid) return;
   const filterCounts = { all: state.items.length, available: state.items.filter(item => item.statusKey === 'available').length, repair: state.items.filter(item => ['repair', 'repair_in_progress'].includes(item.statusKey)).length, donation: state.items.filter(item => item.statusKey === 'donation').length };
+  setText('nav-resource-count', filterCounts.available);
   document.querySelectorAll('.segment[data-filter]').forEach(button => { const count = button.querySelector('b'); if (count) count.textContent = filterCounts[button.dataset.filter] ?? 0; });
   if (!state.items.length) {
     grid.innerHTML = `<div class="empty-state"><strong>${state.apiOnline ? '没有找到匹配的资源' : '等待后端数据'}</strong><p>${state.apiOnline ? '可以换一个关键词，或清除当前筛选。' : '运行 node server.js 后刷新页面。'}</p></div>`;
@@ -590,7 +601,8 @@ function openOrderModal(id) {
   const nextStatus = { new: 'progress', progress: 'pickup', pickup: 'done', done: 'done' }[order.status]; const nextLabel = { new: '开始处理', progress: '标记待清运', pickup: '完成工单', done: '已完成' }[order.status]; const statusLabel = { new: '待处理', progress: '处理中', pickup: '待清运', done: '已完成' }[order.status];
   const history = (order.history || [{ label: statusLabel, at: order.due }]).map(step => `<div class="timeline-step complete"><span class="timeline-dot"></span><div><strong>${escapeHtml(step.label)}</strong><small>${escapeHtml(step.at || '')}</small></div></div>`).join('');
   const assignment = ['operator','admin'].includes(state.user?.role) ? `<div class="form-field inline-assignee"><label for="order-assignee">负责人</label><select id="order-assignee">${assigneeOptions(order.person)}</select><button class="button small secondary" type="button" id="save-order-assignee">保存负责人</button></div>` : `<div><span>负责人</span><span>${escapeHtml(order.person)} · Facilities</span></div>`;
-  openModal(`<div class="modal-head"><div><p class="panel-kicker">WORK ORDER · ${escapeHtml(order.id)}</p><h2>${escapeHtml(order.title)}</h2><p>${escapeHtml(order.area)} · ${escapeHtml(order.type)}</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="detail-list"><div><span>当前状态</span><span>${statusLabel}</span></div><div><span>截止时间</span><span>${escapeHtml(order.due)}</span></div><div><span>数量</span><span>${escapeHtml(order.quantity || 1)}</span></div><div><span>优先级</span><span>${escapeHtml(order.priority)}</span></div>${assignment}<div><span>处理说明</span><span>${escapeHtml(order.description || '暂无说明')}</span></div></div><div class="timeline"><p class="panel-kicker">WORK ORDER AUDIT</p>${history}</div><div class="modal-actions"><button class="button secondary" data-close-modal="true">关闭</button><button class="button primary" id="advance-order" ${order.status === 'done' ? 'disabled' : ''}>${nextLabel} <span>→</span></button></div>`);
+  const ratingSummary = order.rating ? `<div><span>学生满意度</span><span class="green-text">${escapeHtml(order.rating)} / 5${order.feedback ? ` · ${escapeHtml(order.feedback)}` : ''}</span></div>` : '';
+  openModal(`<div class="modal-head"><div><p class="panel-kicker">WORK ORDER · ${escapeHtml(order.id)}</p><h2>${escapeHtml(order.title)}</h2><p>${escapeHtml(order.area)} · ${escapeHtml(order.type)}</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="detail-list"><div><span>当前状态</span><span>${statusLabel}</span></div><div><span>截止时间</span><span>${escapeHtml(order.due)}</span></div><div><span>数量</span><span>${escapeHtml(order.quantity || 1)}</span></div><div><span>优先级</span><span>${escapeHtml(order.priority)}</span></div>${assignment}${ratingSummary}<div><span>处理说明</span><span>${escapeHtml(order.description || '暂无说明')}</span></div></div><div class="timeline"><p class="panel-kicker">WORK ORDER AUDIT</p>${history}</div><div class="modal-actions"><button class="button secondary" data-close-modal="true">关闭</button><button class="button primary" id="advance-order" ${order.status === 'done' ? 'disabled' : ''}>${nextLabel} <span>→</span></button></div>`);
   const saveAssignee = document.getElementById('save-order-assignee'); if (saveAssignee) saveAssignee.addEventListener('click', async () => { if (!requireApi()) return; const assignee = document.getElementById('order-assignee')?.value; if (!assignee) return showToast('请选择一名设施运营负责人', 'error'); saveAssignee.disabled = true; try { await apiRequest(`/api/work-orders/${encodeURIComponent(order.id)}`, { method: 'PATCH', body: JSON.stringify({ person: assignee }) }); closeModal(); await Promise.all([loadWorkOrders(), loadDashboard(), loadStudentProgress()]); showToast(`${order.id} 已分配给 ${assigneeOptions(assignee).match(/selected[^>]*>([^<]+)/)?.[1] || '设施运营人员'}`); } catch (error) { saveAssignee.disabled = false; handleApiError(error); } });
   const advance = document.getElementById('advance-order'); if (advance && order.status !== 'done') advance.addEventListener('click', async () => { if (!requireApi()) return; const assignee = document.getElementById('order-assignee')?.value; try { await apiRequest(`/api/work-orders/${encodeURIComponent(order.id)}`, { method: 'PATCH', body: JSON.stringify({ status: nextStatus, person: assignee }) }); closeModal(); await Promise.all([loadWorkOrders(), loadDashboard(), loadStudentProgress()]); showToast(`${order.id} 已更新，状态进入下一阶段`); } catch (error) { handleApiError(error); } });
   if (['operator', 'admin'].includes(state.user?.role)) { const notes = (order.notes || []).map(note => `<div class="work-log-row"><strong>${escapeHtml(note.text)}</strong><small>${escapeHtml(note.by)} · ${escapeHtml(note.at)}</small></div>`).join(''); const evidence = (order.evidence || []).map(item => `<span class="evidence-chip">${escapeHtml(item.label)} · ${escapeHtml(item.by)}</span>`).join(''); document.querySelector('.modal')?.insertAdjacentHTML('beforeend', `<div class="work-order-log"><div class="panel-heading"><div><p class="panel-kicker">FIELD NOTES & EVIDENCE</p><h3>处理记录</h3></div><span class="small-muted">写入审计</span></div><div class="work-log-list">${notes || '<p class="empty-inline">暂无处理备注</p>'}</div><div class="evidence-chip-list">${evidence || '<span class="empty-inline">暂无现场证据</span>'}</div><form id="work-note-form" class="work-note-form"><input name="note" placeholder="补充处理备注" /><input name="evidence" placeholder="证据名称或照片编号" /><button class="button small primary" type="submit">保存记录</button></form></div>`); document.getElementById('work-note-form')?.addEventListener('submit', async event => { event.preventDefault(); if (!requireApi()) return; const body = Object.fromEntries(new FormData(event.currentTarget).entries()); if (!body.note && !body.evidence) return showToast('请填写备注或证据名称', 'error'); try { await apiRequest(`/api/work-orders/${encodeURIComponent(order.id)}`, { method: 'PATCH', body: JSON.stringify(body) }); closeModal(); await Promise.all([loadWorkOrders(), loadDashboard(), loadAudit()]); showToast('处理记录已保存'); } catch (error) { handleApiError(error); } }); }
@@ -605,8 +617,11 @@ function openStudentProgressModal(id, kind) {
   const typeLabel = kind === 'riskReport' ? '风险上报' : '设施问题';
   const meta = kind === 'riskReport' ? (item.category + ' · ' + item.location) : (item.area + ' · ' + item.type);
   const nodes = flow.map((node, index) => '<div class="student-flow-node ' + node.state + '"><span class="student-flow-index">' + String(index + 1).padStart(2, '0') + '</span><div class="student-flow-copy"><div><strong>' + escapeHtml(node.label) + '</strong><span class="student-flow-state">' + (node.state === 'complete' ? '已完成' : node.state === 'current' ? '当前节点' : node.state === 'rejected' ? '已打回' : '待处理') + '</span></div><small>负责人：' + escapeHtml(node.owner) + '</small><p>' + escapeHtml(node.meta) + '</p></div></div>').join('');
-  const resubmit = isRisk && item.status === 'rejected' ? '<button class="button secondary" data-action="open-risk-report">重新提交风险</button>' : '';
-  openModal('<div class="modal-head"><div><p class="panel-kicker">MY REPORT · ' + escapeHtml(item.id) + '</p><h2>' + typeLabel + '详情</h2><p>' + escapeHtml(meta) + '</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="student-current-node ' + current.state + '"><div><span>当前处理节点</span><strong>' + escapeHtml(current.label) + '</strong></div><div><span>当前负责人</span><strong>' + escapeHtml(current.owner) + '</strong></div></div><div class="student-flow">' + nodes + '</div><div class="modal-actions">' + resubmit + '<button class="button primary" data-close-modal="true">知道了</button></div>');
+  const resubmit = kind === 'riskReport' && item.status === 'rejected' ? '<button class="button secondary" data-action="open-risk-report">重新提交风险</button>' : '';
+  const ratingOptions = [1, 2, 3, 4, 5].map(score => `<label><input type="radio" name="rating" value="${score}"${score === 5 ? ' checked' : ''}><span>${score}★</span></label>`).join('');
+  const rating = kind === 'workOrder' && item.status === 'done' ? (item.rating ? `<div class="student-rating-card"><div><span class="panel-kicker">SERVICE FEEDBACK</span><strong>你的满意度：${escapeHtml(item.rating)} / 5</strong><small>${escapeHtml(item.feedback || '已完成评价')}</small></div></div>` : `<form id="student-rating-form" class="student-rating-form"><div><span class="panel-kicker">SERVICE FEEDBACK</span><strong>工单已完成，给设施运营打个分</strong></div><div class="rating-stars" role="radiogroup" aria-label="满意度评分">${ratingOptions}</div><textarea name="feedback" placeholder="可选：告诉我们哪里做得好，或还可以怎样改进"></textarea><button class="button small primary" type="submit">提交评价</button></form>`) : '';
+  openModal('<div class="modal-head"><div><p class="panel-kicker">MY REPORT · ' + escapeHtml(item.id) + '</p><h2>' + typeLabel + '详情</h2><p>' + escapeHtml(meta) + '</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="student-current-node ' + current.state + '"><div><span>当前处理节点</span><strong>' + escapeHtml(current.label) + '</strong></div><div><span>当前负责人</span><strong>' + escapeHtml(current.owner) + '</strong></div></div><div class="student-flow">' + nodes + '</div>' + rating + '<div class="modal-actions">' + resubmit + '<button class="button primary" data-close-modal="true">知道了</button></div>');
+  document.getElementById('student-rating-form')?.addEventListener('submit', async event => { event.preventDefault(); if (!requireApi()) return; const body = Object.fromEntries(new FormData(event.currentTarget).entries()); try { await apiRequest(`/api/work-orders/${encodeURIComponent(item.id)}`, { method: 'PATCH', body: JSON.stringify({ rating: body.rating, feedback: body.feedback }) }); closeModal(); await Promise.all([loadStudentProgress(), loadNotifications(), loadDashboard()]); showToast('感谢评价，满意度已记录'); } catch (error) { handleApiError(error); } });
 }
 
 function openRiskModal() {
@@ -730,7 +745,7 @@ document.addEventListener('click', event => {
     if (action.dataset.action === 'copy-summary') { const summary = 'CampusLoop 实施路线：需求与用户研究 → Residence B–D 试点 → 评估与调整 → 全校推广'; copyText(summary, '实施摘要已复制', summary); }
     if (action.dataset.action === 'open-settings') openInfoModal('项目设置', 'WORKSPACE SETTINGS', '<p>当前为本地演示环境。离线模式、自动刷新和数据写入都由当前浏览器与本地 Node 服务控制。</p><p>如需切换账号，请点击右上角退出后重新登录。</p>');
     if (action.dataset.action === 'open-help') openInfoModal('帮助中心', 'INTERACTION GUIDE', '<ul><li>资源交换：发布资源后会进入人工审核队列，学生可预约已通过审核的资源。</li><li>设施运营：负责人只能推进自己负责的工单，管理员可以查看全部工单。</li><li>治理与风险：可持续管理员和系统管理员可以登记、更新风险。</li><li>工单页面每 15 秒刷新一次，页面上的时间会显示最近一次后端同步。</li></ul>');
-    if (action.dataset.action === 'open-notifications') openInfoModal('通知中心', 'NOTIFICATIONS', state.notifications?.length ? state.notifications.slice(0, 8).map(entry => `<p><strong>${escapeHtml(entry.title)}</strong><br><small>${escapeHtml(entry.detail)} · ${escapeHtml(entry.at)}</small></p>`).join('') : '<p>当前没有新的操作通知。</p>');
+    if (action.dataset.action === 'open-notifications') { openInfoModal('通知中心', 'NOTIFICATIONS', state.notifications?.length ? state.notifications.slice(0, 8).map(entry => `<p><strong>${escapeHtml(entry.title)}</strong><br><small>${escapeHtml(entry.detail)} · ${escapeHtml(entry.at)}</small></p>`).join('') : '<p>当前没有新的操作通知。</p>'); const count = document.getElementById('notification-count'); const dot = document.querySelector('.notification-dot'); if (count) count.classList.add('hidden'); if (dot) dot.classList.add('hidden'); }
     if (action.dataset.action === 'open-pilot-info') openInfoModal('退宿季资源回收行动', 'PILOT BRIEF', '<p>本试点围绕 Residence B–D 设计资源发布、人工审核、预约领取、设施工单和离线同步五条闭环。</p><p>页面中的影响数字是课程演示数据；资源、工单、风险、账户和审计记录会写入本地后端数据文件。</p>');
     if (action.dataset.action === 'open-mix-details') openInfoModal('资源构成明细', 'MATERIAL MIX', '<p>家具与木材 42% · 书籍与纸张 26% · 电子产品 18% · 其他 14%。这些比例用于展示 RFP 指标设计，正式部署时应由资源分类记录计算。</p>');
     if (action.dataset.action === 'show-toast') showToast(action.dataset.toast || '已完成');

@@ -732,6 +732,21 @@ body::before {
 .review-summary-kind { color: #8075bd; font-family: 'DM Mono', monospace; font-size: 8px; letter-spacing: .12em; }
 .review-summary-row .button { flex: 0 0 auto; }
 .moderation-panel, #risk-report-panel, #account-directory-panel { scroll-margin-top: 104px; }
+.moderation-empty { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border: 1px dashed rgba(118,89,246,.24); border-radius: 13px; background: rgba(249,248,255,.76); }
+.moderation-handoff { border-left: 3px solid var(--teal); padding-left: 10px; }
+.moderation-kind { display: inline-block; margin-right: 7px; padding: 3px 6px; border-radius: 5px; color: #087f70; background: #e5f8f3; font-size: 8px; letter-spacing: .08em; }
+.notification-button { position: relative; overflow: visible; }
+.notification-count { position: absolute; top: -5px; right: -6px; min-width: 16px; height: 16px; display: grid; place-items: center; padding: 0 4px; border: 2px solid #fff; border-radius: 99px; color: #fff; background: var(--red); font-size: 8px; font-weight: 800; line-height: 1; }
+.notification-count.hidden, .notification-dot.hidden { display: none; }
+.pilot-panel .amber-progress i { background: var(--amber) !important; }
+.student-rating-form, .student-rating-card { display: grid; gap: 10px; margin-top: 16px; padding: 14px; border: 1px solid rgba(118,89,246,.17); border-radius: 14px; background: linear-gradient(135deg, rgba(248,246,255,.96), rgba(238,249,246,.78)); }
+.student-rating-form strong, .student-rating-card strong { display: block; margin-top: 3px; color: var(--ink); font-size: 12px; }
+.student-rating-form textarea { min-height: 58px; resize: vertical; }
+.rating-stars { display: flex; gap: 5px; }
+.rating-stars label { cursor: pointer; }
+.rating-stars input { position: absolute; opacity: 0; pointer-events: none; }
+.rating-stars span { display: inline-block; padding: 6px 8px; border: 1px solid rgba(118,89,246,.18); border-radius: 8px; color: #9b91c7; background: #fff; font-size: 11px; transition: .18s ease; }
+.rating-stars input:checked + span, .rating-stars label:hover span { color: #fff; border-color: var(--purple); background: var(--purple); box-shadow: 0 5px 12px rgba(118,89,246,.2); }
 .student-progress-panel { margin-bottom: 20px; background: linear-gradient(145deg, rgba(255,255,255,.98), rgba(246,245,255,.92)); }
 .student-progress-panel .panel-helper { margin: 4px 0 0; }
 .student-progress-list { display: grid; gap: 8px; }
