@@ -713,3 +713,23 @@ body::before {
   .modal { padding: 23px 19px; }
 }
 
+/* Interaction clarity fixes */
+.metric-card::before, .metric-card::after { z-index: 0; pointer-events: none; }
+.metric-card > * { position: relative; z-index: 1; }
+.access-ring { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+.access-ring strong, .access-ring span { position: relative; display: block; text-align: center; }
+.insight-panel { color: #fff; border-color: #443d77; background: linear-gradient(135deg, #28243d, #423a77); }
+.insight-panel h2 { color: #fff; }
+.insight-panel p { color: rgba(255,255,255,.68); }
+.insight-panel p strong { color: #e5ddff; }
+.insight-panel .button.secondary { color: #fff; border-color: rgba(255,255,255,.24); background: rgba(255,255,255,.12); }
+.insight-panel .button.secondary:hover { color: #fff; background: rgba(255,255,255,.2); }
+.panel-focus { animation: panelFocus 1.7s ease; }
+@keyframes panelFocus { 0%, 100% { box-shadow: var(--shadow-lift); } 22% { box-shadow: 0 0 0 4px rgba(118,89,246,.24), 0 24px 60px rgba(66,47,166,.18); } }
+.review-summary-row { padding: 14px 0; }
+.review-summary-row > div:first-child { display: flex; flex-direction: column; gap: 3px; }
+.review-summary-row strong { font-size: 12px; }
+.review-summary-kind { color: #8075bd; font-family: 'DM Mono', monospace; font-size: 8px; letter-spacing: .12em; }
+.review-summary-row .button { flex: 0 0 auto; }
+.moderation-panel, #risk-report-panel, #account-directory-panel { scroll-margin-top: 104px; }
+
