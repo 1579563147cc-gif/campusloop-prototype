@@ -782,3 +782,12 @@ body::before {
 .student-flow-copy small { display: block; margin-top: 5px; color: #78798b; font-size: 9px; }
 .student-flow-copy p { margin: 4px 0 0; color: #a0a1ad; font-size: 9px; line-height: 1.45; }
 @media (max-width: 480px) { .student-current-node { grid-template-columns: 1fr; }.student-progress-detail { display: none; } }
+.inline-assignee { flex-wrap: wrap; }
+.inline-assignee select { flex: 1; min-width: 190px; }
+.inline-assignee .button { flex: 0 0 auto; }
+.risk-report-row { align-items: flex-start; }
+.risk-report-reviewer { display: grid; grid-template-columns: minmax(170px, 1fr) auto; gap: 5px; min-width: 260px; }
+.risk-report-reviewer label { grid-column: 1 / -1; color: #85869a; font-size: 8px; font-weight: 800; letter-spacing: .05em; }
+.risk-report-reviewer select { min-height: 31px; padding: 6px 8px; outline: 0; border: 1px solid rgba(92,82,155,.16); border-radius: 8px; color: #55566a; background: #fff; font-size: 9px; }
+.risk-report-reviewer select:focus { border-color: var(--purple); box-shadow: 0 0 0 3px var(--purple-soft); }
+@media (max-width: 760px) { .risk-report-reviewer { width: 100%; min-width: 0; }.risk-report-actions { width: 100%; } }

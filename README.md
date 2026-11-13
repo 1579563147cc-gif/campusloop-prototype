@@ -11,6 +11,7 @@
 - 资源发布：`POST /api/items`；
 - 工单创建和状态推进：`POST/PATCH /api/work-orders`；
 - 工单负责人目录和实时状态刷新：`GET /api/work-order-assignees`、页面每 15 秒轮询 `GET /api/work-orders`；
+- 风险复核人目录与分配：`GET /api/risk-reviewers`、`PATCH /api/risk-reports/:id/assign`；
 - 风险登记：`POST /api/risks`；
 - 风险状态与缓解措施更新：`PATCH /api/risks/:id`；
 - 研究证据录入：`GET/POST /api/evidence`；
