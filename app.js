@@ -300,6 +300,33 @@ function renderDashboard() {
   if (ring) ring.style.background = `conic-gradient(var(--teal) 0 ${accessPercent}%, #e9f4f0 ${accessPercent}% 100%)`;
 }
 
+function studentAssigneeLabel(person) {
+  return { LM: 'Lin Mei · 设施运营', JC: 'Jordan Chen · 设施运营', AK: 'Ava Kim · 设施运营', UNASSIGNED: '设施运营主管 · 待分配' }[person] || '设施运营团队';
+}
+
+function studentFlowFor(item, kind) {
+  if (kind === 'riskReport') {
+    const approved = item.status === 'approved';
+    const rejected = item.status === 'rejected';
+    return [
+      { label: '已提交上报', state: 'complete', owner: item.reportedByName || '你', meta: '学生提交风险信息' },
+      { label: rejected ? '已打回' : approved ? '审核完成' : '人工审核中', state: rejected ? 'rejected' : approved ? 'complete' : 'current', owner: '可持续管理员 / 系统管理员', meta: rejected ? (item.reviewReason || '审核未通过') : approved ? '已通过人工审核' : '等待人工审核处理' },
+      { label: '风险登记', state: approved ? 'complete' : 'pending', owner: item.owner && item.owner !== '待分配' ? item.owner : '治理负责人 · 待分配', meta: approved ? `已登记 · ${item.formalRiskStatus || '监控中'}` : '审核通过后自动登记' },
+      { label: '持续监控', state: approved && item.formalRiskStatus === '监控中' ? 'current' : 'pending', owner: item.owner && item.owner !== '待分配' ? item.owner : '治理负责人 · 待分配', meta: approved ? '根据风险状态持续跟进' : '尚未进入该节点' }
+    ];
+  }
+  const assigned = item.person && item.person !== 'UNASSIGNED';
+  const statuses = { new: '待分配', progress: '处理中', pickup: '待清运', done: '已完成' };
+  const current = statuses[item.status] || '待处理';
+  return [
+    { label: '问题已上报', state: 'complete', owner: '你', meta: '学生提交设施问题' },
+    { label: assigned ? '负责人已分配' : '待分配负责人', state: assigned ? 'complete' : 'current', owner: assigned ? studentAssigneeLabel(item.person) : '设施运营主管', meta: assigned ? '已进入运营人员工作列表' : '等待设施运营接单' },
+    { label: '现场处理', state: item.status === 'progress' ? 'current' : ['pickup', 'done'].includes(item.status) ? 'complete' : 'pending', owner: assigned ? studentAssigneeLabel(item.person) : '待分配', meta: item.status === 'progress' ? '运营人员正在处理' : item.status === 'new' ? '负责人确认后开始' : '处理节点已完成' },
+    { label: '清运与复核', state: item.status === 'pickup' ? 'current' : item.status === 'done' ? 'complete' : 'pending', owner: assigned ? studentAssigneeLabel(item.person) : '设施运营团队', meta: item.status === 'pickup' ? '等待完成清运并复核' : item.status === 'done' ? '已完成清运和记录复核' : '现场处理完成后进入' },
+    { label: '工单完成', state: item.status === 'done' ? 'complete' : 'pending', owner: '设施运营团队', meta: item.status === 'done' ? '流程已闭环' : `当前节点：${current}` }
+  ];
+}
+
 function studentOrderProgress(order) {
   const config = {
     new: { label: '已上报 · 待分配', percent: 25, tone: 'blue' },
@@ -307,7 +334,7 @@ function studentOrderProgress(order) {
     pickup: { label: '待清运', percent: 78, tone: 'amber' },
     done: { label: '已完成', percent: 100, tone: 'green' }
   }[order.status] || { label: '处理中', percent: 50, tone: 'purple' };
-  return { kind: 'workOrder', id: order.id, title: order.title, meta: `${order.area} · ${order.due || '截止时间待确认'}`, status: config.label, percent: config.percent, tone: config.tone, item: order };
+  return { kind: 'workOrder', id: order.id, title: order.title, meta: `${order.area} · ${order.due || '截止时间待确认'}`, status: config.label, percent: config.percent, tone: config.tone, item: order, currentOwner: studentFlowFor(order, 'workOrder').find(node => node.state === 'current')?.owner || '设施运营团队' };
 }
 
 function studentRiskProgress(report) {
@@ -318,7 +345,7 @@ function studentRiskProgress(report) {
     : rejected
       ? { label: '已驳回', percent: 100, tone: 'red' }
       : { label: '审核中', percent: 48, tone: 'amber' };
-  return { kind: 'riskReport', id: report.id, title: report.title, meta: `${report.category} · ${report.location}`, status: config.label, percent: config.percent, tone: config.tone, item: report };
+  return { kind: 'riskReport', id: report.id, title: report.title, meta: `${report.category} · ${report.location}`, status: config.label, percent: config.percent, tone: config.tone, item: report, currentOwner: studentFlowFor(report, 'riskReport').find(node => node.state === 'current' || node.state === 'rejected')?.owner || report.owner || '治理负责人' };
 }
 
 function renderStudentProgress() {
@@ -334,7 +361,7 @@ function renderStudentProgress() {
     list.innerHTML = '<div class="student-progress-empty"><span class="student-progress-empty-icon">⌁</span><div><strong>还没有上报记录</strong><p>提交设施问题或风险后，你可以在这里跟踪处理进度。</p></div><div class="student-progress-empty-actions"><button class="button small secondary" data-action="open-work-order">报告设施问题</button><button class="button small primary" data-action="open-risk-report">上报风险</button></div></div>';
     return;
   }
-  list.innerHTML = rows.map(row => `<button class="student-progress-row" data-student-progress-id="${escapeHtml(row.id)}" data-student-progress-kind="${escapeHtml(row.kind)}"><span class="student-progress-type ${row.kind === 'riskReport' ? 'risk' : 'facility'}">${row.kind === 'riskReport' ? '风险' : '设施'}</span><span class="student-progress-copy"><strong>${escapeHtml(row.title)}</strong><small>${escapeHtml(row.meta)}</small></span><span class="student-progress-state"><strong>${escapeHtml(row.status)}</strong><span class="student-progress-track"><i class="${row.tone}" style="width:${row.percent}%"></i></span></span><span class="student-progress-arrow">→</span></button>`).join('');
+  list.innerHTML = rows.map(row => `<button class="student-progress-row" data-student-progress-id="${escapeHtml(row.id)}" data-student-progress-kind="${escapeHtml(row.kind)}"><span class="student-progress-type ${row.kind === 'riskReport' ? 'risk' : 'facility'}">${row.kind === 'riskReport' ? '风险' : '设施'}</span><span class="student-progress-copy"><strong>${escapeHtml(row.title)}</strong><small>${escapeHtml(row.meta)}</small></span><span class="student-progress-state"><strong>${escapeHtml(row.status)}</strong><small>负责人：${escapeHtml(row.currentOwner)}</small><span class="student-progress-track"><i class="${row.tone}" style="width:${row.percent}%"></i></span></span><span class="student-progress-detail">查看详情</span><span class="student-progress-arrow">→</span></button>`).join('');
 }
 
 function renderEvidence() {
@@ -527,6 +554,18 @@ function openOrderModal(id) {
   const assignment = ['operator','admin'].includes(state.user?.role) ? `<div class="form-field inline-assignee"><label for="order-assignee">负责人</label><select id="order-assignee">${assigneeOptions(order.person)}</select></div>` : `<div><span>负责人</span><span>${escapeHtml(order.person)} · Facilities</span></div>`;
   openModal(`<div class="modal-head"><div><p class="panel-kicker">WORK ORDER · ${escapeHtml(order.id)}</p><h2>${escapeHtml(order.title)}</h2><p>${escapeHtml(order.area)} · ${escapeHtml(order.type)}</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="detail-list"><div><span>当前状态</span><span>${statusLabel}</span></div><div><span>截止时间</span><span>${escapeHtml(order.due)}</span></div><div><span>数量</span><span>${escapeHtml(order.quantity || 1)}</span></div><div><span>优先级</span><span>${escapeHtml(order.priority)}</span></div>${assignment}<div><span>处理说明</span><span>${escapeHtml(order.description || '暂无说明')}</span></div></div><div class="timeline"><p class="panel-kicker">WORK ORDER AUDIT</p>${history}</div><div class="modal-actions"><button class="button secondary" data-close-modal="true">关闭</button><button class="button primary" id="advance-order" ${order.status === 'done' ? 'disabled' : ''}>${nextLabel} <span>→</span></button></div>`);
   const advance = document.getElementById('advance-order'); if (advance && order.status !== 'done') advance.addEventListener('click', async () => { if (!requireApi()) return; const assignee = document.getElementById('order-assignee')?.value; try { await apiRequest(`/api/work-orders/${encodeURIComponent(order.id)}`, { method: 'PATCH', body: JSON.stringify({ status: nextStatus, person: assignee }) }); closeModal(); await Promise.all([loadWorkOrders(), loadDashboard()]); showToast(`${order.id} 已更新，状态进入下一阶段`); } catch (error) { handleApiError(error); } });
+}
+
+function openStudentProgressModal(id, kind) {
+  if (state.user?.role !== 'student') return;
+  const item = kind === 'riskReport' ? state.studentProgress.riskReports.find(entry => entry.id === id) : state.studentProgress.workOrders.find(entry => entry.id === id);
+  if (!item) return;
+  const flow = studentFlowFor(item, kind);
+  const current = flow.find(node => node.state === 'current' || node.state === 'rejected') || flow.find(node => node.state === 'pending') || flow[flow.length - 1];
+  const typeLabel = kind === 'riskReport' ? '风险上报' : '设施问题';
+  const meta = kind === 'riskReport' ? (item.category + ' · ' + item.location) : (item.area + ' · ' + item.type);
+  const nodes = flow.map((node, index) => '<div class="student-flow-node ' + node.state + '"><span class="student-flow-index">' + String(index + 1).padStart(2, '0') + '</span><div class="student-flow-copy"><div><strong>' + escapeHtml(node.label) + '</strong><span class="student-flow-state">' + (node.state === 'complete' ? '已完成' : node.state === 'current' ? '当前节点' : node.state === 'rejected' ? '已打回' : '待处理') + '</span></div><small>负责人：' + escapeHtml(node.owner) + '</small><p>' + escapeHtml(node.meta) + '</p></div></div>').join('');
+  openModal('<div class="modal-head"><div><p class="panel-kicker">MY REPORT · ' + escapeHtml(item.id) + '</p><h2>' + typeLabel + '详情</h2><p>' + escapeHtml(meta) + '</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="student-current-node ' + current.state + '"><div><span>当前处理节点</span><strong>' + escapeHtml(current.label) + '</strong></div><div><span>当前负责人</span><strong>' + escapeHtml(current.owner) + '</strong></div></div><div class="student-flow">' + nodes + '</div><div class="modal-actions"><button class="button primary" data-close-modal="true">知道了</button></div>');
 }
 
 function openRiskModal() {
