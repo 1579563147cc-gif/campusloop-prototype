@@ -747,6 +747,9 @@ body::before {
 .rating-stars input { position: absolute; opacity: 0; pointer-events: none; }
 .rating-stars span { display: inline-block; padding: 6px 8px; border: 1px solid rgba(118,89,246,.18); border-radius: 8px; color: #9b91c7; background: #fff; font-size: 11px; transition: .18s ease; }
 .rating-stars input:checked + span, .rating-stars label:hover span { color: #fff; border-color: var(--purple); background: var(--purple); box-shadow: 0 5px 12px rgba(118,89,246,.2); }
+.handoff-schedule { display: grid; grid-template-columns: 1fr 1fr auto; align-items: end; gap: 10px; margin-top: 15px; padding: 13px; border: 1px solid rgba(59,187,165,.2); border-radius: 13px; background: rgba(231,249,245,.55); }
+.handoff-schedule .form-field { margin: 0; }
+@media (max-width: 560px) { .handoff-schedule { grid-template-columns: 1fr; } }
 .student-progress-panel { margin-bottom: 20px; background: linear-gradient(145deg, rgba(255,255,255,.98), rgba(246,245,255,.92)); }
 .student-progress-panel .panel-helper { margin: 4px 0 0; }
 .student-progress-list { display: grid; gap: 8px; }
@@ -837,3 +840,4 @@ body::before {
 .resource-location-card { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding: 12px 13px; border: 1px solid rgba(32,189,167,.18); border-radius: 12px; background: linear-gradient(100deg, #eafbf7, #f5f2ff); }
 .resource-location-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 9px; color: #178a70; background: #d9f6ee; font-size: 15px; }
 .resource-location-card div { display: grid; gap: 2px; }.resource-location-card strong { color: #3c3e58; font-size: 10px; }.resource-location-card span, .resource-location-card small { color: #77798d; font-size: 9px; }.resource-location-card small { color: #178a70; }
+
