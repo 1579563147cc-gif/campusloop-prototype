@@ -303,6 +303,7 @@ function renderDashboard() {
   setText('nav-resource-count', metrics.availableItems ?? metrics.activeItems ?? 0);
   setText('overview-active-items', metrics.activeItems ?? '—');
   setText('overview-open-orders', metrics.openOrders ?? '—');
+  setText('overview-orders-overdue', `${metrics.overdueOrders ?? 0} 项逾期`);
   setText('overview-reuse-rate', `${metrics.reuseRate ?? '—'}%`);
   setText('overview-avoided-kg', `${metrics.avoidedKg ?? 0} kg`);
   setText('overview-published-items', metrics.activeItems ?? '—');
