@@ -55,6 +55,7 @@ const seedStore = {
 };
 
 let store;
+let pendingPersistence = Promise.resolve();
 
 async function initStore() {
   await fs.mkdir(DATA_DIR, { recursive: true });
@@ -78,10 +79,15 @@ async function initStore() {
   await persist();
 }
 
-async function persist() {
-  const tempPath = `${DATA_PATH}.tmp`;
-  await fs.writeFile(tempPath, JSON.stringify(store, null, 2), 'utf8');
-  await fs.rename(tempPath, DATA_PATH);
+function persist() {
+  const snapshot = JSON.stringify(store, null, 2);
+  const write = pendingPersistence.catch(() => {}).then(async () => {
+    const tempPath = `${DATA_PATH}.tmp`;
+    await fs.writeFile(tempPath, snapshot, 'utf8');
+    await fs.rename(tempPath, DATA_PATH);
+  });
+  pendingPersistence = write;
+  return write;
 }
 
 function sendJson(res, statusCode, payload, extraHeaders = {}) { res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS', ...extraHeaders }); res.end(JSON.stringify(payload)); }
@@ -104,6 +110,7 @@ function activeRiskReviewers() { return store.userDirectory.filter(entry => entr
 function validAssignee(value) { return activeOperators().some(entry => entry.initials === value || entry.username === value); }
 function normalizedAssignee(value, fallback) { const candidate = text(value, fallback); const match = activeOperators().find(entry => entry.initials === candidate || entry.username === candidate); return match ? match.initials : null; }
 function normalizedReviewer(value, fallback) { const candidate = text(value, fallback); const match = activeRiskReviewers().find(entry => entry.username === candidate); return match || null; }
+function itemAvoidedKg(item) { const match = String(item.impact || '').match(/(\d+(?:\.\d+)?)\s*kg/i); return match ? Number(match[1]) : 12; }
 
 async function appendAudit(user, actionLabel, entityType, entityId, entityLabel, reason = '', change = null) {
   store.auditLog.unshift({ id: `AUD-${Date.now()}`, actor: user?.username || 'system', displayName: user?.displayName || 'System', initials: user?.initials || 'SYS', actionLabel, entityType, entityId, entityLabel, reason, change, at: new Date().toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' }) });
@@ -127,11 +134,12 @@ function requireUser(req, res, roles = []) {
 
 function dashboardMetrics(user) {
   const visibleOrders = user.role === 'operator' ? store.workOrders.filter(order => order.person === user.initials || order.person === user.username || order.person === 'UNASSIGNED') : user.role === 'student' ? [] : store.workOrders;
-  const activeItemsList = store.items.filter(item => item.statusKey !== 'rejected');
-  const claimedItems = store.items.filter(item => ['donation', 'reserved', 'repair_in_progress', 'completed'].includes(item.statusKey) || item.status === '已预约').length;
+  const activeItemsList = store.items.filter(item => item.statusKey !== 'rejected' && item.status !== '待审核');
+  const claimedItems = store.items.filter(item => ['reserved', 'completed'].includes(item.statusKey) && item.claimedBy).length;
   const completedReuseItems = store.items.filter(item => item.statusKey === 'completed').length;
-  const reusedItems = store.items.filter(item => ['donation', 'reserved', 'completed'].includes(item.statusKey) || item.status === '已预约').length;
+  const reusedItems = completedReuseItems;
   const activeItems = activeItemsList.length;
+  const availableItems = store.items.filter(item => item.statusKey === 'available' && item.status !== '待审核').length;
   const pendingItems = store.items.filter(item => item.status === '待审核').length;
   const openOrders = visibleOrders.filter(order => order.status !== 'done').length;
   const pickupSites = visibleOrders.filter(order => order.status === 'pickup').length;
@@ -139,15 +147,15 @@ function dashboardMetrics(user) {
   const overdueOrders = visibleOrders.filter(order => order.status !== 'done' && /逾期|昨天|超时/.test(order.due || '')).length;
   const completionRate = Number(((completedOrders / Math.max(visibleOrders.length, 1)) * 100).toFixed(1));
   const reuseRate = Number(((reusedItems / Math.max(activeItems, 1)) * 100).toFixed(1));
-  const avoidedKg = reusedItems * 12;
+  const avoidedKg = store.items.filter(item => item.statusKey === 'completed').reduce((sum, item) => sum + itemAvoidedKg(item), 0);
   const mixBase = Math.max(activeItems, 1);
   const mix = ['家具', '书籍', '电子产品', '其他'].map(category => ({ category, value: activeItemsList.filter(item => category === '其他' ? !['家具', '书籍', '电子产品'].some(key => String(item.category).includes(key)) : String(item.category).includes(category)).length })).map(entry => ({ ...entry, percent: Number(((entry.value / mixBase) * 100).toFixed(1)) }));
-  const locationMap = new Map(); activeItemsList.forEach(item => { const location = String(item.location || '待确认地点').split('·')[0].trim(); locationMap.set(location, (locationMap.get(location) || 0) + (['donation', 'reserved', 'completed'].includes(item.statusKey) || item.status === '已预约' ? 12 : 4)); });
+  const locationMap = new Map(); activeItemsList.filter(item => item.statusKey === 'completed').forEach(item => { const location = String(item.location || '待确认地点').split('·')[0].trim(); locationMap.set(location, (locationMap.get(location) || 0) + itemAvoidedKg(item)); });
   const locations = [...locationMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([location, value]) => ({ location, value }));
   const baseTrend = Math.max(avoidedKg, 24); const trend = Array.from({ length: 7 }, (_, index) => ({ label: index === 6 ? '今天' : `${String(index + 1).padStart(2, '0')}日`, value: Math.round(baseTrend * (0.48 + index * 0.08)) }));
   const reviewPercent = Math.round((store.userDirectory.filter(entry => entry.reviewed === true).reduce((sum, entry) => sum + entry.reviewWeight, 0) / Math.max(store.userDirectory.reduce((sum, entry) => sum + entry.reviewWeight, 0), 1)) * 100);
   const dataCompleteness = Math.min(100, Math.round(((store.items.length + store.workOrders.length + store.risks.length) / Math.max(store.items.length + store.workOrders.length + store.risks.length + 3, 1)) * 100));
-  return { activeItems, pendingItems, claimedItems, reusedItems, completedReuseItems, openOrders, pickupSites, completedOrders, overdueOrders, completionRate, risks: store.risks.length, offlineQueue: store.meta.offlineQueue, lastSync: store.meta.lastSync, reuseRate, avoidedKg, accountCount: store.userDirectory.length, activeAccountCount: store.userDirectory.filter(entry => entry.active !== false).length, reviewedAccountCount: store.userDirectory.filter(entry => entry.reviewed === true).length, reviewPercent, trend, mix, locations, pilotHealth: { participation: Math.min(100, 60 + Math.min(activeItems, 30)), onTime: completionRate, dataCompleteness }, sla: { open: openOrders, overdue: overdueOrders, averageHours: Number((openOrders ? Math.max(2.4, 18 / Math.max(completionRate / 10, 1)) : 0).toFixed(1)) }, kpis: [{ key: 'reuseRate', label: '再利用率', target: 70, actual: reuseRate, unit: '%' }, { key: 'completionRate', label: '工单准时完成率', target: 90, actual: completionRate, unit: '%' }, { key: 'reviewTime', label: '风险审核时长', target: 24, actual: 18, unit: '小时' }, { key: 'dataCompleteness', label: '数据完整度', target: 95, actual: dataCompleteness, unit: '%' }] };
+  return { activeItems, availableItems, pendingItems, claimedItems, reusedItems, completedReuseItems, openOrders, pickupSites, completedOrders, overdueOrders, completionRate, risks: store.risks.length, offlineQueue: store.meta.offlineQueue, lastSync: store.meta.lastSync, reuseRate, avoidedKg, accountCount: store.userDirectory.length, activeAccountCount: store.userDirectory.filter(entry => entry.active !== false).length, reviewedAccountCount: store.userDirectory.filter(entry => entry.reviewed === true).length, reviewPercent, trend, mix, locations, pilotHealth: { participation: Math.min(100, 60 + Math.min(activeItems, 30)), onTime: completionRate, dataCompleteness }, sla: { open: openOrders, overdue: overdueOrders, averageHours: Number((openOrders ? Math.max(2.4, 18 / Math.max(completionRate / 10, 1)) : 0).toFixed(1)) }, kpis: [{ key: 'reuseRate', label: '再利用率', target: 70, actual: reuseRate, unit: '%' }, { key: 'completionRate', label: '工单准时完成率', target: 90, actual: completionRate, unit: '%' }, { key: 'reviewTime', label: '风险审核时长', target: 24, actual: 18, unit: '小时' }, { key: 'dataCompleteness', label: '数据完整度', target: 95, actual: dataCompleteness, unit: '%' }] };
 }
 
 async function handleApi(req, res, url) {
@@ -183,8 +191,8 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { todos: todos.slice(0, 12) });
   }
   if (req.method === 'GET' && segments[0] === 'api' && segments[1] === 'items') {
-    const filter = url.searchParams.get('filter'); const query = (url.searchParams.get('search') || '').toLowerCase();
-    return sendJson(res, 200, { items: store.items.filter(item => (!filter || filter === 'all' || item.statusKey === filter) && (!query || `${item.name} ${item.category} ${item.location} ${item.id}`.toLowerCase().includes(query))) });
+    const filter = url.searchParams.get('filter'); const query = (url.searchParams.get('search') || '').toLowerCase(); const items = store.items.filter(item => (!filter || filter === 'all' || (filter === 'available' ? item.statusKey === 'available' && (item.status !== '待审核' || item.ownerUsername === user.username) : item.statusKey === filter)) && (!query || `${item.name} ${item.category} ${item.location} ${item.id}`.toLowerCase().includes(query))); const counts = { all: store.items.length, available: store.items.filter(item => item.statusKey === 'available' && item.status !== '待审核').length, repair: store.items.filter(item => ['repair', 'repair_in_progress'].includes(item.statusKey)).length, donation: store.items.filter(item => item.statusKey === 'donation').length };
+    return sendJson(res, 200, { items, counts });
   }
   if (req.method === 'POST' && url.pathname === '/api/items') {
     const body = await readJsonBody(req); const name = text(body.name); const category = text(body.category, '其他'); const location = text(body.location, '待确认地点');
@@ -195,7 +203,7 @@ async function handleApi(req, res, url) {
   if (req.method === 'PATCH' && segments[0] === 'api' && segments[1] === 'items' && segments[2] && segments[3] === 'review') {
     if (!['operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '只有设施运营或系统管理员可以审核资源');
     const item = store.items.find(entry => entry.id === segments[2]); if (!item) return sendError(res, 404, 'NOT_FOUND', '资源不存在');
-    const body = await readJsonBody(req); const approved = body.decision === 'approved'; const before = { status: item.status, statusKey: item.statusKey }; item.status = approved ? '待领取' : '已驳回'; item.statusKey = approved ? 'available' : 'rejected'; item.reviewedBy = user.username; item.reviewedByName = user.displayName; item.history = [...(item.history || []), { label: approved ? '审核通过' : '审核驳回', at: '刚刚', by: user.username }]; await appendAudit(user, approved ? '审核通过资源' : '驳回资源', 'Resource', item.id, item.name, '', { before, after: { status: item.status, statusKey: item.statusKey } }); await persist(); return sendJson(res, 200, { item });
+    const body = await readJsonBody(req); if (!['approved', 'rejected'].includes(body.decision)) return sendError(res, 400, 'VALIDATION_ERROR', '请选择通过或驳回'); if (item.status !== '待审核') return sendError(res, 409, 'INVALID_STATE', '该资源已审核或正在流转'); const approved = body.decision === 'approved'; const before = { status: item.status, statusKey: item.statusKey }; item.status = approved ? '待领取' : '已驳回'; item.statusKey = approved ? 'available' : 'rejected'; item.reviewedBy = user.username; item.reviewedByName = user.displayName; item.updatedAt = new Date().toISOString(); item.history = [...(item.history || []), { label: approved ? '审核通过' : '审核驳回', at: '刚刚', by: user.username }]; await appendAudit(user, approved ? '审核通过资源' : '驳回资源', 'Resource', item.id, item.name, '', { before, after: { status: item.status, statusKey: item.statusKey } }); await persist(); return sendJson(res, 200, { item });
   }
   if (req.method === 'GET' && url.pathname === '/api/moderation/queue') { if (!['operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '没有人工审核权限'); return sendJson(res, 200, { items: store.items.filter(item => item.status === '待审核'), handoffs: store.workOrders.filter(order => order.sourceType === 'resourceHandoff' && order.status !== 'done') }); }
   if (req.method === 'GET' && url.pathname === '/api/audit') { if (!['operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '没有审计日志权限'); return sendJson(res, 200, { audit: store.auditLog }); }
@@ -222,7 +230,7 @@ async function handleApi(req, res, url) {
   if (req.method === 'PATCH' && segments[0] === 'api' && segments[1] === 'items' && segments[2]) {
     const item = store.items.find(entry => entry.id === segments[2]); if (!item) return sendError(res, 404, 'NOT_FOUND', '资源不存在');
     const body = await readJsonBody(req); const now = new Date().toISOString();
-    if (body.action === 'claim') { if (user.role !== 'student') return sendError(res, 403, 'FORBIDDEN', '只有学生用户可以预约领取资源'); if (item.statusKey !== 'available') return sendError(res, 409, 'INVALID_STATE', '资源当前不可预约'); item.status = '已预约'; item.statusKey = 'reserved'; item.claimedBy = user.username; item.claimedByName = user.displayName; item.history = [...(item.history || []), { label: '已预约领取', at: '刚刚', by: user.username }]; const handoff = { id: nextId('WO', store.workOrders), title: `资源交接：${item.name}`, area: item.location || '待确认地点', type: '资源交接', due: '待安排', status: 'new', person: 'UNASSIGNED', quantity: 1, priority: '中', description: '学生预约后生成的资源交接任务，请设施运营分配领取地点和负责人。', notes: [], evidence: [], createdBy: user.username, sourceType: 'resourceHandoff', resourceId: item.id, history: [{ label: '待分配资源交接负责人', at: '刚刚', by: user.username }], createdAt: now }; store.workOrders.unshift(handoff); item.handoffOrderId = handoff.id; await appendAudit(user, '预约资源并创建交接工单', 'Resource', item.id, item.name, '', { after: { status: item.status, handoffOrderId: handoff.id } }); }
+    if (body.action === 'claim') { if (user.role !== 'student') return sendError(res, 403, 'FORBIDDEN', '只有学生用户可以预约领取资源'); if (item.statusKey !== 'available' || item.status === '待审核') return sendError(res, 409, 'INVALID_STATE', '资源尚未通过审核或当前不可预约'); item.status = '已预约'; item.statusKey = 'reserved'; item.claimedBy = user.username; item.claimedByName = user.displayName; item.history = [...(item.history || []), { label: '已预约领取', at: '刚刚', by: user.username }]; const handoff = { id: nextId('WO', store.workOrders), title: `资源交接：${item.name}`, area: item.location || '待确认地点', type: '资源交接', due: '待安排', status: 'new', person: 'UNASSIGNED', quantity: 1, priority: '中', description: '学生预约后生成的资源交接任务，请设施运营分配领取地点和负责人。', notes: [], evidence: [], createdBy: user.username, sourceType: 'resourceHandoff', resourceId: item.id, history: [{ label: '待分配资源交接负责人', at: '刚刚', by: user.username }], createdAt: now }; store.workOrders.unshift(handoff); item.handoffOrderId = handoff.id; await appendAudit(user, '预约资源并创建交接工单', 'Resource', item.id, item.name, '', { after: { status: item.status, handoffOrderId: handoff.id } }); }
     else if (body.action === 'claim_repair') { if (!['operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '只有设施运营或管理员可以认领维修任务'); if (!['repair', 'repair_in_progress'].includes(item.statusKey)) return sendError(res, 409, 'INVALID_STATE', '该资源当前不可认领维修'); item.status = '维修处理中'; item.statusKey = 'repair_in_progress'; item.claimedBy = user.username; item.claimedByName = user.displayName; item.history = [...(item.history || []), { label: '已认领维修', at: '刚刚', by: user.username }]; await appendAudit(user, '认领维修资源', 'Resource', item.id, item.name); }
     else if (body.action === 'complete_repair') { if (!['operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '只有设施运营或管理员可以完成维修'); if (item.statusKey !== 'repair_in_progress') return sendError(res, 409, 'INVALID_STATE', '该资源尚未进入维修处理中'); item.status = '维修完成 · 待领取'; item.statusKey = 'available'; item.history = [...(item.history || []), { label: '维修完成，可再次领取', at: '刚刚', by: user.username }]; await appendAudit(user, '完成资源维修', 'Resource', item.id, item.name); }
     else if (body.action === 'complete_reuse') { if (!['operator','admin'].includes(user.role)) return sendError(res, 403, 'FORBIDDEN', '只有设施运营或管理员可以完成再利用登记'); if (!['reserved', 'repair_in_progress', 'available', 'donation'].includes(item.statusKey)) return sendError(res, 409, 'INVALID_STATE', '该资源当前不能登记再利用完成'); item.status = '已完成再利用'; item.statusKey = 'completed'; item.completedBy = user.username; item.completedByName = user.displayName; item.completedAt = now; item.history = [...(item.history || []), { label: '完成再利用登记', at: '刚刚', by: user.username }]; await appendAudit(user, '完成再利用登记', 'Resource', item.id, item.name); }
@@ -248,7 +256,7 @@ async function handleApi(req, res, url) {
   }
   if (req.method === 'PATCH' && segments[0] === 'api' && segments[1] === 'work-orders' && segments[2]) {
     const order = store.workOrders.find(entry => entry.id === segments[2]); if (!order) return sendError(res, 404, 'NOT_FOUND', '工单不存在');
-    const body = await readJsonBody(req); const before = { person: order.person, status: order.status }; const canManage = user.role === 'admin' || order.person === user.initials; if (body.rating !== undefined || body.feedback !== undefined) { if (user.role !== 'student' || order.createdBy !== user.username || order.status !== 'done') return sendError(res, 403, 'FORBIDDEN', '只有提交人可以评价已完成工单'); const rating = Number(body.rating); if (!Number.isInteger(rating) || rating < 1 || rating > 5) return sendError(res, 400, 'VALIDATION_ERROR', '满意度请评分 1 到 5 分'); order.rating = rating; order.feedback = text(body.feedback); order.ratedBy = user.username; order.ratedAt = new Date().toISOString(); await appendAudit(user, '评价完成工单', 'WorkOrder', order.id, order.title, order.feedback || `${rating} 分`); }
+    const body = await readJsonBody(req); const before = { person: order.person, status: order.status }; const canManage = user.role === 'admin' || order.person === user.initials; if ((body.status || body.note || body.evidence) && !canManage) return sendError(res, 403, 'FORBIDDEN', '只有负责人或管理员可以推进或记录该工单'); if (body.status && !['new', 'progress', 'pickup', 'done'].includes(body.status)) return sendError(res, 400, 'VALIDATION_ERROR', '无效的工单状态'); if (body.person && ['operator', 'admin'].includes(user.role) && !normalizedAssignee(body.person, order.person)) return sendError(res, 400, 'VALIDATION_ERROR', '负责人必须是启用中的设施运营人员'); if (body.area !== undefined || body.due !== undefined) { if (!['operator', 'admin'].includes(user.role) || order.sourceType !== 'resourceHandoff') return sendError(res, 403, 'FORBIDDEN', '只有设施运营或管理员可以安排资源交接'); if (order.status === 'done') return sendError(res, 409, 'INVALID_STATE', '已完成的交接不能修改安排'); const nextArea = text(body.area); const nextDue = text(body.due); if (!nextArea || !nextDue || nextArea.length > 200 || nextDue.length > 100) return sendError(res, 400, 'VALIDATION_ERROR', '请填写有效的领取地点和交接时间'); order.area = nextArea; order.due = nextDue; const resource = store.items.find(item => item.id === order.resourceId); if (resource) { resource.location = order.area; resource.updatedAt = new Date().toISOString(); resource.history = [...(resource.history || []), { label: `交接安排：${order.area} · ${order.due}`, at: '刚刚', by: user.username }]; } await appendAudit(user, '更新资源交接安排', 'WorkOrder', order.id, order.title, `${order.area} · ${order.due}`); } if (body.rating !== undefined || body.feedback !== undefined) { if (user.role !== 'student' || order.createdBy !== user.username || order.status !== 'done') return sendError(res, 403, 'FORBIDDEN', '只有提交人可以评价已完成工单'); const rating = Number(body.rating); if (!Number.isInteger(rating) || rating < 1 || rating > 5) return sendError(res, 400, 'VALIDATION_ERROR', '满意度请评分 1 到 5 分'); order.rating = rating; order.feedback = text(body.feedback); order.ratedBy = user.username; order.ratedAt = new Date().toISOString(); await appendAudit(user, '评价完成工单', 'WorkOrder', order.id, order.title, order.feedback || `${rating} 分`); }
     if (body.person && ['operator','admin'].includes(user.role)) { const nextPerson = normalizedAssignee(body.person, order.person); if (!nextPerson) return sendError(res, 400, 'VALIDATION_ERROR', '负责人必须是启用中的设施运营人员'); order.person = nextPerson; } if (body.note || body.evidence) { if (!canManage) return sendError(res, 403, 'FORBIDDEN', '只有负责人或管理员可以添加处理记录'); if (body.note) order.notes = [...(order.notes || []), { text: text(body.note), by: user.displayName, at: new Date().toISOString() }]; if (body.evidence) order.evidence = [...(order.evidence || []), { label: text(body.evidence), by: user.displayName, at: new Date().toISOString() }]; await appendAudit(user, '补充工单处理记录', 'WorkOrder', order.id, order.title, text(body.note || body.evidence)); } const allowed = ['new', 'progress', 'pickup', 'done']; if (body.status && allowed.includes(body.status)) { if (!canManage) return sendError(res, 403, 'FORBIDDEN', '只有负责人或管理员可以推进该工单'); order.status = body.status; order.history = [...(order.history || []), { label: { new: '待处理', progress: '处理中', pickup: '待清运', done: '已完成' }[body.status], at: '刚刚', by: user.username }]; if (order.sourceType === 'resourceHandoff' && order.resourceId && body.status === 'done') { const linkedItem = store.items.find(entry => entry.id === order.resourceId); if (linkedItem) { linkedItem.status = '已完成再利用'; linkedItem.statusKey = 'completed'; linkedItem.completedBy = user.username; linkedItem.completedByName = user.displayName; linkedItem.completedAt = new Date().toISOString(); linkedItem.history = [...(linkedItem.history || []), { label: '交接工单完成，已完成再利用', at: '刚刚', by: user.username }]; } } } if (before.person !== order.person) await appendAudit(user, '分配工单负责人', 'WorkOrder', order.id, order.title, '', { before, after: { person: order.person, status: order.status } }); if (before.status !== order.status) await appendAudit(user, '推进工单状态', 'WorkOrder', order.id, order.title, '', { before, after: { person: order.person, status: order.status } }); order.updatedAt = new Date().toISOString(); await persist(); return sendJson(res, 200, { workOrder: order });
   }
   if (req.method === 'GET' && url.pathname === '/api/risks') { if (user.role === 'student') return sendError(res, 403, 'FORBIDDEN', '学生账户不能访问风险后台'); return sendJson(res, 200, { risks: store.risks }); }
@@ -303,8 +311,8 @@ async function handleApi(req, res, url) {
 const mimeTypes = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8' };
 async function serveStatic(req, res, url) {
   const requestPath = url.pathname === '/' ? '/index.html' : url.pathname;
-  const filePath = path.resolve(ROOT, `.${requestPath}`);
-  if (!filePath.startsWith(ROOT)) return sendError(res, 403, 'FORBIDDEN', '禁止访问该路径');
+  if (!['/index.html', '/app.js', '/styles.css'].includes(requestPath)) return sendError(res, 404, 'NOT_FOUND', '文件不存在');
+  const filePath = path.join(ROOT, requestPath.slice(1));
   try { const content = await fs.readFile(filePath); res.writeHead(200, { 'Content-Type': mimeTypes[path.extname(filePath)] || 'application/octet-stream', 'Cache-Control': 'no-store' }); res.end(content); }
   catch { sendError(res, 404, 'NOT_FOUND', '文件不存在'); }
 }
@@ -317,3 +325,4 @@ async function requestHandler(req, res) {
 }
 
 initStore().then(() => http.createServer(requestHandler).listen(PORT, () => console.log(`CampusLoop backend ready: http://localhost:${PORT}`))).catch(error => { console.error(error); process.exitCode = 1; });
+
