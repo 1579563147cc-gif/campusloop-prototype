@@ -313,7 +313,7 @@ function renderDashboard() {
   setText('ops-open-orders', metrics.openOrders ?? '—');
   setText('ops-overdue-orders', metrics.overdueOrders ?? '—');
   setText('ops-pickup-sites', metrics.pickupSites ?? '—');
-  setText('ops-completion-rate', `${metrics.completionRate ?? '—'}%`);
+  setText('ops-completion-rate', metrics.completionRate ?? '—');
   setText('ops-offline-queue', metrics.offlineQueue ?? state.queuedRequests.length);
   setText('chart-avoided-kg', `${metrics.avoidedKg ?? 0} kg`);
   setText('impact-avoided-kg', `${metrics.avoidedKg ?? 0} kg`);
