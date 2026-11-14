@@ -8,6 +8,7 @@ const state = {
   queuedRequests: JSON.parse(localStorage.getItem('campusloop-offline-queue') || '[]'),
   apiOnline: false,
   items: [],
+  itemCounts: { all: 0, available: 0, repair: 0, donation: 0 },
   workOrders: [],
   studentProgress: { workOrders: [], riskReports: [] },
   risks: [],
@@ -16,6 +17,7 @@ const state = {
   reviewCenter: { resources: [], riskReports: [], workOrders: [] },
   todos: [],
   notifications: [],
+  notificationUnread: 0,
   users: [],
   evidence: [],
   metrics: {},
@@ -152,9 +154,13 @@ async function loadReviewCenter() {
 async function loadNotifications() {
   const payload = await apiRequest('/api/notifications');
   state.notifications = payload.notifications || [];
+  const seenKey = `campusloop-seen-notifications:${state.user?.username || 'anonymous'}`;
+  const seen = new Set(JSON.parse(localStorage.getItem(seenKey) || '[]'));
+  const signature = entry => `${entry.id}|${entry.detail}|${entry.at}`;
+  state.notificationUnread = state.notifications.filter(entry => !seen.has(signature(entry))).length;
   const count = document.getElementById('notification-count');
   const dot = document.querySelector('.notification-dot');
-  const unread = state.notifications.length;
+  const unread = state.notificationUnread;
   if (count) { count.textContent = unread > 99 ? '99+' : String(unread); count.classList.toggle('hidden', unread === 0); }
   if (dot) dot.classList.toggle('hidden', unread === 0);
 }
@@ -170,6 +176,7 @@ async function loadItems() {
   if (state.search.trim()) params.set('search', state.search.trim());
   const payload = await apiRequest(`/api/items?${params.toString()}`);
   state.items = payload.items || [];
+  state.itemCounts = payload.counts || state.itemCounts;
   renderItems();
 }
 
@@ -231,6 +238,8 @@ async function loadRiskReviewers() {
 async function loadModerationQueue() {
   if (!['operator', 'admin'].includes(state.user?.role)) return;
   const payload = await apiRequest('/api/moderation/queue');
+  const handoffIds = new Set((payload.handoffs || []).map(order => order.id));
+  state.workOrders = [...state.workOrders.filter(order => !handoffIds.has(order.id)), ...(payload.handoffs || [])];
   renderModerationQueue(payload.items || [], payload.handoffs || []);
 }
 
@@ -291,10 +300,11 @@ function setText(id, value) { const element = document.getElementById(id); if (e
 
 function renderDashboard() {
   const metrics = state.metrics || {};
-  setText('nav-resource-count', metrics.activeItems ?? 0);
+  setText('nav-resource-count', metrics.availableItems ?? metrics.activeItems ?? 0);
   setText('overview-active-items', metrics.activeItems ?? '—');
   setText('overview-open-orders', metrics.openOrders ?? '—');
   setText('overview-reuse-rate', `${metrics.reuseRate ?? '—'}%`);
+  setText('overview-avoided-kg', `${metrics.avoidedKg ?? 0} kg`);
   setText('overview-published-items', metrics.activeItems ?? '—');
   setText('overview-pending-items', metrics.pendingItems ?? '—');
   setText('overview-claimed-items', metrics.claimedItems ?? '—');
@@ -472,7 +482,7 @@ function itemEmoji(item) {
 function renderItems() {
   const grid = document.getElementById('item-grid');
   if (!grid) return;
-  const filterCounts = { all: state.items.length, available: state.items.filter(item => item.statusKey === 'available').length, repair: state.items.filter(item => ['repair', 'repair_in_progress'].includes(item.statusKey)).length, donation: state.items.filter(item => item.statusKey === 'donation').length };
+  const filterCounts = state.itemCounts || { all: state.items.length, available: state.items.filter(item => item.statusKey === 'available').length, repair: state.items.filter(item => ['repair', 'repair_in_progress'].includes(item.statusKey)).length, donation: state.items.filter(item => item.statusKey === 'donation').length };
   setText('nav-resource-count', filterCounts.available);
   document.querySelectorAll('.segment[data-filter]').forEach(button => { const count = button.querySelector('b'); if (count) count.textContent = filterCounts[button.dataset.filter] ?? 0; });
   if (!state.items.length) {
@@ -582,7 +592,7 @@ function resourceFlowFor(item) {
 function openItemModal(id) {
   const item = state.items.find(entry => entry.id === id); if (!item) return;
   const resourceTimeline = resourceFlowFor(item).map((step, index) => `<div class="timeline-step ${step.state === 'pending' ? '' : step.state === 'current' ? 'current' : 'complete'}"><span class="timeline-dot"></span><div><strong>${escapeHtml(step.label)}</strong><small>负责人：${escapeHtml(step.owner)} · ${escapeHtml(step.meta)}</small></div></div>`).join('');
-  const canOperate = ['operator', 'admin'].includes(state.user?.role); const action = item.statusKey === 'available' ? { id: 'claim-item', label: '预约领取', action: 'claim', tone: 'primary' } : item.statusKey === 'repair' && canOperate ? { id: 'claim-item', label: '认领维修', action: 'claim_repair', tone: 'primary' } : item.statusKey === 'repair_in_progress' && canOperate ? { id: 'claim-item', label: '完成维修并开放领取', action: 'complete_repair', tone: 'primary' } : ['reserved', 'donation'].includes(item.statusKey) && canOperate ? { id: 'claim-item', label: '登记完成再利用', action: 'complete_reuse', tone: 'primary' } : item.statusKey === 'completed' ? { id: 'claim-item', label: '已完成再利用', action: null, tone: 'secondary' } : { id: 'claim-item', label: '查看处理进度', action: null, tone: 'secondary' };
+  const canOperate = ['operator', 'admin'].includes(state.user?.role); const action = item.statusKey === 'available' && state.user?.role === 'student' ? { id: 'claim-item', label: '预约领取', action: 'claim', tone: 'primary' } : item.statusKey === 'repair' && canOperate ? { id: 'claim-item', label: '认领维修', action: 'claim_repair', tone: 'primary' } : item.statusKey === 'repair_in_progress' && canOperate ? { id: 'claim-item', label: '完成维修并开放领取', action: 'complete_repair', tone: 'primary' } : item.statusKey === 'donation' && canOperate ? { id: 'claim-item', label: '登记完成再利用', action: 'complete_reuse', tone: 'primary' } : item.statusKey === 'completed' ? { id: 'claim-item', label: '已完成再利用', action: null, tone: 'secondary' } : { id: 'claim-item', label: item.statusKey === 'reserved' ? '请在交接工单中继续处理' : '查看处理进度', action: null, tone: 'secondary' };
   const claimed = item.claimedByName ? `<div><span>当前处理人</span><span>${escapeHtml(item.claimedByName)}</span></div>` : '';
   const publishAction = state.user?.role === 'student' && ['donation', 'completed'].includes(item.statusKey) ? '<button class="button secondary" data-action="open-add-item">发布/捐赠我的资源</button>' : '';
   openModal(`<div class="modal-head"><div><p class="panel-kicker">RESOURCE DETAIL · ${escapeHtml(item.id)}</p><h2>资源详情与流转</h2></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="detail-hero"><span class="item-emoji">${itemEmoji(item)}</span><div class="detail-meta"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.category)} · ${escapeHtml(item.status)}</span></div></div><div class="resource-location-card"><span class="resource-location-icon">⌖</span><div><strong>领取/交接地点</strong><span>${escapeHtml(item.location)}</span><small>${item.statusKey === 'available' ? '可预约后按地点领取' : item.statusKey === 'repair_in_progress' ? '维修完成后恢复领取' : '按当前流程节点处理'}</small></div></div><div class="detail-list"><div><span>发布者</span><span>${escapeHtml(item.owner)}</span></div>${claimed}<div><span>循环价值</span><span class="green-text">${escapeHtml(item.impact)}</span></div><div><span>更新时间</span><span>${escapeHtml(item.updatedAt || item.posted)}</span></div></div><div class="timeline"><p class="panel-kicker">RESOURCE LIFECYCLE</p>${resourceTimeline}</div><div class="modal-actions">${publishAction}<button class="button secondary" data-close-modal="true">关闭</button><button class="button ${action.tone}" id="claim-item" ${action.action ? '' : 'disabled'}>${action.label} <span>→</span></button></div>`);
@@ -602,8 +612,10 @@ function openOrderModal(id) {
   const history = (order.history || [{ label: statusLabel, at: order.due }]).map(step => `<div class="timeline-step complete"><span class="timeline-dot"></span><div><strong>${escapeHtml(step.label)}</strong><small>${escapeHtml(step.at || '')}</small></div></div>`).join('');
   const assignment = ['operator','admin'].includes(state.user?.role) ? `<div class="form-field inline-assignee"><label for="order-assignee">负责人</label><select id="order-assignee">${assigneeOptions(order.person)}</select><button class="button small secondary" type="button" id="save-order-assignee">保存负责人</button></div>` : `<div><span>负责人</span><span>${escapeHtml(order.person)} · Facilities</span></div>`;
   const ratingSummary = order.rating ? `<div><span>学生满意度</span><span class="green-text">${escapeHtml(order.rating)} / 5${order.feedback ? ` · ${escapeHtml(order.feedback)}` : ''}</span></div>` : '';
-  openModal(`<div class="modal-head"><div><p class="panel-kicker">WORK ORDER · ${escapeHtml(order.id)}</p><h2>${escapeHtml(order.title)}</h2><p>${escapeHtml(order.area)} · ${escapeHtml(order.type)}</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="detail-list"><div><span>当前状态</span><span>${statusLabel}</span></div><div><span>截止时间</span><span>${escapeHtml(order.due)}</span></div><div><span>数量</span><span>${escapeHtml(order.quantity || 1)}</span></div><div><span>优先级</span><span>${escapeHtml(order.priority)}</span></div>${assignment}${ratingSummary}<div><span>处理说明</span><span>${escapeHtml(order.description || '暂无说明')}</span></div></div><div class="timeline"><p class="panel-kicker">WORK ORDER AUDIT</p>${history}</div><div class="modal-actions"><button class="button secondary" data-close-modal="true">关闭</button><button class="button primary" id="advance-order" ${order.status === 'done' ? 'disabled' : ''}>${nextLabel} <span>→</span></button></div>`);
-  const saveAssignee = document.getElementById('save-order-assignee'); if (saveAssignee) saveAssignee.addEventListener('click', async () => { if (!requireApi()) return; const assignee = document.getElementById('order-assignee')?.value; if (!assignee) return showToast('请选择一名设施运营负责人', 'error'); saveAssignee.disabled = true; try { await apiRequest(`/api/work-orders/${encodeURIComponent(order.id)}`, { method: 'PATCH', body: JSON.stringify({ person: assignee }) }); closeModal(); await Promise.all([loadWorkOrders(), loadDashboard(), loadStudentProgress()]); showToast(`${order.id} 已分配给 ${assigneeOptions(assignee).match(/selected[^>]*>([^<]+)/)?.[1] || '设施运营人员'}`); } catch (error) { saveAssignee.disabled = false; handleApiError(error); } });
+  const handoffSchedule = order.sourceType === 'resourceHandoff' && ['operator', 'admin'].includes(state.user?.role) && order.status !== 'done' ? `<div class="handoff-schedule"><div class="form-field"><label for="handoff-area">领取地点</label><input id="handoff-area" value="${escapeHtml(order.area || '')}" maxlength="200" /></div><div class="form-field"><label for="handoff-due">交接时间</label><input id="handoff-due" value="${escapeHtml(order.due === '待安排' ? '' : order.due || '')}" maxlength="100" placeholder="例如：今天 16:30" /></div><button class="button small secondary" type="button" id="save-handoff-arrangement">保存交接安排</button></div>` : '';
+  openModal(`<div class="modal-head"><div><p class="panel-kicker">WORK ORDER · ${escapeHtml(order.id)}</p><h2>${escapeHtml(order.title)}</h2><p>${escapeHtml(order.area)} · ${escapeHtml(order.type)}</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><div class="detail-list"><div><span>当前状态</span><span>${statusLabel}</span></div><div><span>截止时间</span><span>${escapeHtml(order.due)}</span></div><div><span>数量</span><span>${escapeHtml(order.quantity || 1)}</span></div><div><span>优先级</span><span>${escapeHtml(order.priority)}</span></div>${assignment}${ratingSummary}<div><span>处理说明</span><span>${escapeHtml(order.description || '暂无说明')}</span></div></div>${handoffSchedule}<div class="timeline"><p class="panel-kicker">WORK ORDER AUDIT</p>${history}</div><div class="modal-actions"><button class="button secondary" data-close-modal="true">关闭</button><button class="button primary" id="advance-order" ${order.status === 'done' ? 'disabled' : ''}>${nextLabel} <span>→</span></button></div>`);
+  const saveHandoff = document.getElementById('save-handoff-arrangement'); if (saveHandoff) saveHandoff.addEventListener('click', async () => { if (!requireApi()) return; const area = document.getElementById('handoff-area')?.value.trim(); const due = document.getElementById('handoff-due')?.value.trim(); if (!area || !due) return showToast('请填写领取地点和交接时间', 'error'); saveHandoff.disabled = true; try { await apiRequest(`/api/work-orders/${encodeURIComponent(order.id)}`, { method: 'PATCH', body: JSON.stringify({ area, due }) }); closeModal(); await Promise.all([loadWorkOrders(), loadDashboard(), loadItems(), loadAudit()]); showToast('资源交接地点和时间已保存'); } catch (error) { saveHandoff.disabled = false; handleApiError(error); } });
+  const saveAssignee = document.getElementById('save-order-assignee'); if (saveAssignee) saveAssignee.addEventListener('click', async () => { if (!requireApi()) return; const assignee = document.getElementById('order-assignee')?.value; if (!assignee) return showToast('请选择一名设施运营负责人', 'error'); saveAssignee.disabled = true; try { await apiRequest(`/api/work-orders/${encodeURIComponent(order.id)}`, { method: 'PATCH', body: JSON.stringify({ person: assignee }) }); closeModal(); await Promise.all([loadWorkOrders(), loadDashboard(), loadStudentProgress(), loadModerationQueue()]); showToast(`${order.id} 已分配给 ${assigneeOptions(assignee).match(/selected[^>]*>([^<]+)/)?.[1] || '设施运营人员'}`); } catch (error) { saveAssignee.disabled = false; handleApiError(error); } });
   const advance = document.getElementById('advance-order'); if (advance && order.status !== 'done') advance.addEventListener('click', async () => { if (!requireApi()) return; const assignee = document.getElementById('order-assignee')?.value; try { await apiRequest(`/api/work-orders/${encodeURIComponent(order.id)}`, { method: 'PATCH', body: JSON.stringify({ status: nextStatus, person: assignee }) }); closeModal(); await Promise.all([loadWorkOrders(), loadDashboard(), loadStudentProgress()]); showToast(`${order.id} 已更新，状态进入下一阶段`); } catch (error) { handleApiError(error); } });
   if (['operator', 'admin'].includes(state.user?.role)) { const notes = (order.notes || []).map(note => `<div class="work-log-row"><strong>${escapeHtml(note.text)}</strong><small>${escapeHtml(note.by)} · ${escapeHtml(note.at)}</small></div>`).join(''); const evidence = (order.evidence || []).map(item => `<span class="evidence-chip">${escapeHtml(item.label)} · ${escapeHtml(item.by)}</span>`).join(''); document.querySelector('.modal')?.insertAdjacentHTML('beforeend', `<div class="work-order-log"><div class="panel-heading"><div><p class="panel-kicker">FIELD NOTES & EVIDENCE</p><h3>处理记录</h3></div><span class="small-muted">写入审计</span></div><div class="work-log-list">${notes || '<p class="empty-inline">暂无处理备注</p>'}</div><div class="evidence-chip-list">${evidence || '<span class="empty-inline">暂无现场证据</span>'}</div><form id="work-note-form" class="work-note-form"><input name="note" placeholder="补充处理备注" /><input name="evidence" placeholder="证据名称或照片编号" /><button class="button small primary" type="submit">保存记录</button></form></div>`); document.getElementById('work-note-form')?.addEventListener('submit', async event => { event.preventDefault(); if (!requireApi()) return; const body = Object.fromEntries(new FormData(event.currentTarget).entries()); if (!body.note && !body.evidence) return showToast('请填写备注或证据名称', 'error'); try { await apiRequest(`/api/work-orders/${encodeURIComponent(order.id)}`, { method: 'PATCH', body: JSON.stringify(body) }); closeModal(); await Promise.all([loadWorkOrders(), loadDashboard(), loadAudit()]); showToast('处理记录已保存'); } catch (error) { handleApiError(error); } }); }
 }
@@ -745,7 +757,7 @@ document.addEventListener('click', event => {
     if (action.dataset.action === 'copy-summary') { const summary = 'CampusLoop 实施路线：需求与用户研究 → Residence B–D 试点 → 评估与调整 → 全校推广'; copyText(summary, '实施摘要已复制', summary); }
     if (action.dataset.action === 'open-settings') openInfoModal('项目设置', 'WORKSPACE SETTINGS', '<p>当前为本地演示环境。离线模式、自动刷新和数据写入都由当前浏览器与本地 Node 服务控制。</p><p>如需切换账号，请点击右上角退出后重新登录。</p>');
     if (action.dataset.action === 'open-help') openInfoModal('帮助中心', 'INTERACTION GUIDE', '<ul><li>资源交换：发布资源后会进入人工审核队列，学生可预约已通过审核的资源。</li><li>设施运营：负责人只能推进自己负责的工单，管理员可以查看全部工单。</li><li>治理与风险：可持续管理员和系统管理员可以登记、更新风险。</li><li>工单页面每 15 秒刷新一次，页面上的时间会显示最近一次后端同步。</li></ul>');
-    if (action.dataset.action === 'open-notifications') { openInfoModal('通知中心', 'NOTIFICATIONS', state.notifications?.length ? state.notifications.slice(0, 8).map(entry => `<p><strong>${escapeHtml(entry.title)}</strong><br><small>${escapeHtml(entry.detail)} · ${escapeHtml(entry.at)}</small></p>`).join('') : '<p>当前没有新的操作通知。</p>'); const count = document.getElementById('notification-count'); const dot = document.querySelector('.notification-dot'); if (count) count.classList.add('hidden'); if (dot) dot.classList.add('hidden'); }
+    if (action.dataset.action === 'open-notifications') { const seenKey = `campusloop-seen-notifications:${state.user?.username || 'anonymous'}`; const seen = new Set(JSON.parse(localStorage.getItem(seenKey) || '[]')); state.notifications.forEach(entry => seen.add(`${entry.id}|${entry.detail}|${entry.at}`)); localStorage.setItem(seenKey, JSON.stringify([...seen].slice(-80))); state.notificationUnread = 0; openInfoModal('通知中心', 'NOTIFICATIONS', state.notifications?.length ? state.notifications.slice(0, 8).map(entry => `<p><strong>${escapeHtml(entry.title)}</strong><br><small>${escapeHtml(entry.detail)} · ${escapeHtml(entry.at)}</small></p>`).join('') : '<p>当前没有新的操作通知。</p>'); const count = document.getElementById('notification-count'); const dot = document.querySelector('.notification-dot'); if (count) count.classList.add('hidden'); if (dot) dot.classList.add('hidden'); }
     if (action.dataset.action === 'open-pilot-info') openInfoModal('退宿季资源回收行动', 'PILOT BRIEF', '<p>本试点围绕 Residence B–D 设计资源发布、人工审核、预约领取、设施工单和离线同步五条闭环。</p><p>页面中的影响数字是课程演示数据；资源、工单、风险、账户和审计记录会写入本地后端数据文件。</p>');
     if (action.dataset.action === 'open-mix-details') openInfoModal('资源构成明细', 'MATERIAL MIX', '<p>家具与木材 42% · 书籍与纸张 26% · 电子产品 18% · 其他 14%。这些比例用于展示 RFP 指标设计，正式部署时应由资源分类记录计算。</p>');
     if (action.dataset.action === 'show-toast') showToast(action.dataset.toast || '已完成');
@@ -784,3 +796,4 @@ document.addEventListener('click', async event => { const refresh = event.target
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && modalRoot.getAttribute('aria-hidden') === 'false') closeModal(); });
 
 bootstrap();
+
