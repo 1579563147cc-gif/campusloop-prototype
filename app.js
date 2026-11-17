@@ -184,7 +184,7 @@ function showLogin(message = '') {
   document.getElementById('app-shell').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('login-error').textContent = message;
-  setServerStatus('offline', '请先登录');
+  setServerStatus('offline', 'Please sign in');
 }
 
 function showApp(user) {
@@ -220,9 +220,9 @@ async function login(username, password) {
 }
 
 async function loadAuthenticatedData() {
-  setServerStatus('loading', '加载工作空间…');
+  setServerStatus('loading', 'Loading workspace…');
   await Promise.all([loadDashboard(), loadTodos(), loadReviewCenter(), loadNotifications(), loadItems(), loadWorkOrders(), loadStudentProgress(), loadRisks(), loadRiskReports(), loadRiskReviewers(), loadModerationQueue(), loadAudit(), loadUsers(), loadEvidence(), loadAssignees(), loadRewards()]);
-  setServerStatus('online', '已登录 · 后端已连接');
+  setServerStatus('online', 'Signed in · Backend connected');
   persistOfflineQueue();
   startLiveRefresh();
 }
@@ -386,7 +386,7 @@ function renderModerationQueue(items, handoffs = []) {
   count.textContent = `${total} 项`;
   if (!total) { list.innerHTML = '<div class="moderation-empty"><p class="empty-inline">当前没有待审核发布或待处理交接任务。</p><button class="button small secondary" data-action="open-add-item">新建一条待审核资源</button></div>'; return; }
   const resourceRows = items.map(item => `<div class="moderation-row"><div><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.category)} · ${escapeHtml(item.location)} · ${escapeHtml(item.id)}</span></div><div class="moderation-actions"><button class="button small secondary" data-review-item="${escapeHtml(item.id)}" data-review-status="rejected">驳回</button><button class="button small primary" data-review-item="${escapeHtml(item.id)}" data-review-status="approved">通过</button></div></div>`).join('');
-  const handoffRows = handoffs.map(order => `<div class="moderation-row moderation-handoff"><div><strong><span class="moderation-kind">资源交接</span>${escapeHtml(String(order.title || '').replace(/^资源交接：/, ''))}</strong><span>${escapeHtml(order.area || '待确认地点')} · ${escapeHtml(order.due || '待安排')} · ${order.person === 'UNASSIGNED' ? '待分配设施运营负责人' : `负责人 ${escapeHtml(order.person)}`}</span></div><div class="moderation-actions"><button class="button small primary" data-order-id="${escapeHtml(order.id)}">打开交接工单</button></div></div>`).join('');
+  const handoffRows = handoffs.map(order => `<div class="moderation-row moderation-handoff"><div><strong><span class="moderation-kind">资源交接</span>${escapeHtml(String(order.title || '').replace(/^资源交接：/, ''))}</strong><span>${escapeHtml(order.area || '待确认地点')} · ${escapeHtml(order.due || '待安排')} · ${order.person === 'UNASSIGNED' ? 'Facilities owner unassigned' : `负责人 ${escapeHtml(order.person)}`}</span></div><div class="moderation-actions"><button class="button small primary" data-order-id="${escapeHtml(order.id)}">Open handover work order</button></div></div>`).join('');
   list.innerHTML = resourceRows + handoffRows;
 }
 
@@ -567,7 +567,7 @@ function requireRole(roles) {
 
 function handleApiError(error) {
   state.apiOnline = false;
-  setServerStatus('offline', '后端连接异常');
+  setServerStatus('offline', 'Backend connection error');
   showToast(error.message || '后端请求失败', 'error');
 }
 
@@ -843,7 +843,7 @@ async function syncQueue() {
     for (const queued of pending) { await apiRequest(queued.path, { ...queued.options, skipAuthRedirect: true }); state.queuedRequests.shift(); syncedCount += 1; persistOfflineQueue(); }
     await apiRequest('/api/sync', { method: 'POST', body: JSON.stringify({ count: syncedCount }), skipAuthRedirect: true });
     await Promise.all([loadDashboard(), loadItems(), loadWorkOrders(), loadRisks(), loadAudit()]);
-    setServerStatus('online', '后端已连接 · 模拟数据');
+    setServerStatus('online', 'Backend connected · Demo data');
     showToast('Sync complete. Offline records were written to the server.');
   } catch (error) {
     state.offlineMode = wasOffline;
@@ -858,7 +858,7 @@ function toggleOfflineMode() {
   if (!state.apiOnline) { showToast('后端未连接，无法模拟离线', 'error'); return; }
   state.offlineMode = !state.offlineMode;
   persistOfflineQueue();
-  setServerStatus(state.offlineMode ? 'offline' : 'online', state.offlineMode ? '离线模式 · 新写入进入队列' : '后端已连接 · 模拟数据');
+  setServerStatus(state.offlineMode ? 'offline' : 'online', state.offlineMode ? 'Offline mode · New changes are queued' : 'Backend connected · Demo data');
   showToast(state.offlineMode ? '已进入离线模式，新建操作会暂存' : '已退出离线模式，可以同步队列');
 }
 
