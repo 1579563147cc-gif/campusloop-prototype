@@ -6,6 +6,9 @@ const state = {
   token: sessionStorage.getItem('campusloop-token') || '',
   offlineMode: false,
   queuedRequests: JSON.parse(localStorage.getItem('campusloop-offline-queue') || '[]'),
+  syncInProgress: false,
+  syncNeedsSignIn: false,
+  syncMessage: '',
   apiOnline: false,
   items: [],
   itemCounts: { all: 0, available: 0, repair: 0, donation: 0 },
@@ -150,31 +153,51 @@ function setServerStatus(status, message) {
   text.textContent = message;
 }
 
+function ownQueuedRequests() {
+  const owner = state.user?.username;
+  return owner ? state.queuedRequests.filter(entry => entry.owner === owner) : [];
+}
+
 function persistOfflineQueue() {
   localStorage.setItem('campusloop-offline-queue', JSON.stringify(state.queuedRequests));
+  const pending = ownQueuedRequests().length;
   const count = document.getElementById('offline-count');
   const label = document.getElementById('offline-label');
-  if (count) count.textContent = `离线队列 ${String(state.queuedRequests.length).padStart(2, '0')}`;
-  if (label) label.textContent = state.offlineMode ? '当前处于离线模式' : '等待同步到云端';
+  if (count) count.textContent = `Offline queue ${String(pending).padStart(2, '0')}`;
+  if (label) label.textContent = state.syncMessage || (state.offlineMode ? 'Offline mode is active' : pending ? 'Waiting to sync' : 'No pending records');
+  document.querySelector('#top-sync b').textContent = String(pending);
+  document.getElementById('sync-reauth').classList.toggle('hidden', !state.syncNeedsSignIn);
+  setText('ops-offline-queue', pending);
+  for (const id of ['top-sync', 'sync-sidebar', 'offline-mode-button', 'logout-button']) {
+    document.getElementById(id).disabled = state.syncInProgress;
+  }
   const button = document.getElementById('offline-mode-button');
   if (button) button.innerHTML = state.offlineMode ? '<span>●</span> 退出离线' : '<span>⌁</span> 模拟离线';
 }
 
 function queueOfflineRequest(path, options) {
-  state.queuedRequests.push({ path, options: { method: options.method, body: options.body } });
+  state.queuedRequests.push({ owner: state.user.username, path, options: { method: options.method, body: options.body } });
+  if (!state.syncInProgress && !state.syncNeedsSignIn) state.syncMessage = '';
   persistOfflineQueue();
   return { queued: true };
 }
 
 async function apiRequest(path, options = {}) {
-  const { skipAuthRedirect = false, ...requestConfig } = options;
+  const { skipAuthRedirect = false, bypassOfflineQueue = false, ...requestConfig } = options;
   const requestOptions = { headers: { 'Content-Type': 'application/json', ...(requestConfig.headers || {}) }, ...requestConfig };
   if (state.token) requestOptions.headers.Authorization = `Bearer ${state.token}`;
-  if (state.offlineMode && requestOptions.method && requestOptions.method !== 'GET') return queueOfflineRequest(path, requestOptions);
+  if (state.offlineMode && !bypassOfflineQueue && requestOptions.method && requestOptions.method !== 'GET') return queueOfflineRequest(path, requestOptions);
   const response = await fetch(`${API_BASE}${path}`, requestOptions);
   const payload = await response.json().catch(() => ({}));
-  if (response.status === 401 && path !== '/api/auth/login') { const error = new Error('Session expired. Please sign in again.'); error.code = 'UNAUTHENTICATED'; if (!skipAuthRedirect) showLogin(error.message); throw error; }
-  if (!response.ok) throw new Error(payload.error?.message || `请求失败（${response.status}）`);
+  if (!response.ok) {
+    const error = new Error(payload.error?.message || `Request failed (${response.status})`);
+    error.status = response.status;
+    if (response.status === 401 && path !== '/api/auth/login') {
+      error.message = 'Session expired. Please sign in again.';
+      if (!skipAuthRedirect && !state.syncInProgress && !state.offlineMode && !state.syncNeedsSignIn) showLogin(error.message);
+    }
+    throw error;
+  }
   return payload;
 }
 
@@ -189,6 +212,8 @@ function showLogin(message = '') {
 
 function showApp(user) {
   state.user = user; state.apiOnline = true;
+  state.syncNeedsSignIn = false;
+  state.syncMessage = '';
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app-shell').classList.remove('hidden');
   document.getElementById('current-role').textContent = roleLabels[user.role] || user.role;
@@ -319,7 +344,7 @@ async function loadAssignees() {
 function startLiveRefresh() {
   if (state.refreshTimer) clearInterval(state.refreshTimer);
   state.refreshTimer = setInterval(async () => {
-    if (!state.user || !state.apiOnline) return;
+    if (!state.user || !state.apiOnline || state.offlineMode || state.syncInProgress || state.syncNeedsSignIn) return;
     try {
       if (state.activePage === 'operations') await Promise.all([loadWorkOrders(), loadDashboard()]);
       if (state.activePage === 'overview') await Promise.all([loadDashboard(), loadTodos(), loadNotifications(), loadStudentProgress(), loadRewards()]);
@@ -429,7 +454,7 @@ function renderDashboard() {
   setText('ops-overdue-orders', metrics.overdueOrders ?? '—');
   setText('ops-pickup-sites', metrics.pickupSites ?? '—');
   setText('ops-completion-rate', metrics.completionRate ?? '—');
-  setText('ops-offline-queue', metrics.offlineQueue ?? state.queuedRequests.length);
+  setText('ops-offline-queue', ownQueuedRequests().length);
   setText('chart-avoided-kg', `${(metrics.trend || []).reduce((total, point) => total + (Number(point.value) || 0), 0)} completed items`);
   setText('impact-avoided-kg', `${metrics.avoidedKg ?? 0} kg`);
   setText('mix-avoided-kg', metrics.avoidedKg ?? 0);
@@ -767,8 +792,73 @@ function openRiskModal() {
 }
 
 function openRiskReportModal() {
-  openModal(`<div class="modal-head"><div><p class="panel-kicker">RISK REPORT · HUMAN REVIEW</p><h2>上报一个风险</h2><p>提交后进入可持续管理员和系统管理员的人工审核队列。</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><form class="modal-form" id="risk-report-form"><div class="form-field"><label for="report-title">风险名称</label><input id="report-title" name="title" required placeholder="例如：危险物品被错误发布" /></div><div class="form-grid"><div class="form-field"><label for="report-category">类别</label><select id="report-category" name="category"><option>Infrastructure</option><option>Safety</option><option>Ethics</option><option>Privacy</option><option>Operations</option></select></div><div class="form-field"><label for="report-level">等级</label><select id="report-level" name="level"><option value="high">高</option><option value="medium" selected>中</option><option value="low">低</option></select></div></div><div class="form-grid"><div class="form-field"><label for="report-location">发生地点</label><input id="report-location" name="location" required placeholder="例如：North Residence B" /></div><div class="form-field"><label for="report-affected">影响对象</label><input id="report-affected" name="affected" required placeholder="例如：学生、设施团队" /></div></div><div class="form-field"><label for="report-mitigation">风险描述与建议措施</label><textarea id="report-mitigation" name="mitigation" required placeholder="描述你观察到的风险，以及建议如何预防或缓解"></textarea></div><div class="form-field"><label for="report-evidence">补充证据</label><input id="report-evidence" name="evidence" placeholder="照片编号、地点记录或相关链接" /></div><div class="modal-actions"><button class="button secondary" type="button" data-close-modal="true">取消</button><button class="button primary" type="submit">提交人工审核 <span>→</span></button></div></form>`);
-  document.getElementById('risk-report-form').addEventListener('submit', async event => { event.preventDefault(); if (!requireApi()) return; const body = Object.fromEntries(new FormData(event.currentTarget).entries()); try { await apiRequest('/api/risk-reports', { method: 'POST', body: JSON.stringify(body) }); await loadStudentProgress(); closeModal(); showToast('风险已上报，等待人工审核'); } catch (error) { handleApiError(error); } });
+  openModal(`
+    <div class="modal-head">
+      <div>
+        <p class="panel-kicker">RISK REPORT · HUMAN REVIEW</p>
+        <h2>Report a risk</h2>
+        <p>Sustainability and system administrators review submitted reports.</p>
+      </div>
+      <button class="close-modal" type="button" data-close-modal="true" aria-label="Close">×</button>
+    </div>
+    <form class="modal-form" id="risk-report-form">
+      <div class="form-field">
+        <label for="report-title">Risk title</label>
+        <input id="report-title" name="title" required placeholder="e.g. A hazardous item was listed for collection" />
+      </div>
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="report-category">Category</label>
+          <select id="report-category" name="category">
+            <option>Infrastructure</option><option>Safety</option><option>Ethics</option><option>Privacy</option><option>Operations</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label for="report-level">Severity</label>
+          <select id="report-level" name="level">
+            <option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="report-location">Location</label>
+          <input id="report-location" name="location" required placeholder="e.g. North Residence B" />
+        </div>
+        <div class="form-field">
+          <label for="report-affected">Affected groups</label>
+          <input id="report-affected" name="affected" required placeholder="e.g. Students and facilities staff" />
+        </div>
+      </div>
+      <div class="form-field">
+        <label for="report-mitigation">Risk description and suggested action</label>
+        <textarea id="report-mitigation" name="mitigation" required placeholder="Describe what you observed and how the risk could be reduced"></textarea>
+      </div>
+      <div class="form-field">
+        <label for="report-evidence">Supporting evidence (optional)</label>
+        <input id="report-evidence" name="evidence" placeholder="Photo reference, location record or related link" />
+      </div>
+      <div class="modal-actions">
+        <button class="button secondary" type="button" data-close-modal="true">Cancel</button>
+        <button class="button primary" type="submit">Submit for review <span>→</span></button>
+      </div>
+    </form>`);
+
+  document.getElementById('risk-report-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!requireApi()) return;
+    const body = Object.fromEntries(new FormData(event.currentTarget).entries());
+    try {
+      const result = await apiRequest('/api/risk-reports', { method: 'POST', body: JSON.stringify(body) });
+      closeModal();
+      if (result.queued) {
+        showToast('Risk report saved offline. Sync to send it for review.');
+        return;
+      }
+      showToast('Risk report submitted for human review.');
+      await loadStudentProgress();
+    } catch (error) { handleApiError(error); }
+  });
 }
 
 function openRiskDetailModal(id) {
@@ -833,30 +923,60 @@ function openAccessReview() {
 }
 
 async function syncQueue() {
-  if (!state.apiOnline) { showToast('后端未连接，无法同步', 'error'); return; }
-  if (!state.queuedRequests.length) { showToast('没有待同步的离线记录'); return; }
-  const wasOffline = state.offlineMode;
-  state.offlineMode = false;
-  persistOfflineQueue();
-  try {
-    const pending = [...state.queuedRequests]; let syncedCount = 0;
-    for (const queued of pending) { await apiRequest(queued.path, { ...queued.options, skipAuthRedirect: true }); state.queuedRequests.shift(); syncedCount += 1; persistOfflineQueue(); }
-    await apiRequest('/api/sync', { method: 'POST', body: JSON.stringify({ count: syncedCount }), skipAuthRedirect: true });
-    await Promise.all([loadDashboard(), loadItems(), loadWorkOrders(), loadRisks(), loadAudit()]);
-    setServerStatus('online', 'Backend connected · Demo data');
-    showToast('Sync complete. Offline records were written to the server.');
-  } catch (error) {
-    state.offlineMode = wasOffline;
+  if (!state.user || state.syncInProgress) return;
+  const pending = ownQueuedRequests();
+  if (!pending.length) {
+    const message = state.queuedRequests.some(entry => !entry.owner)
+      ? 'Older offline records lack an account and were kept on this device.' : 'No pending records for this account.';
+    showToast(message);
+    return;
+  }
+  if (!navigator.onLine || state.syncNeedsSignIn) {
+    state.syncMessage = state.syncNeedsSignIn ? 'Sign in again to retry sync' : 'Waiting for connection';
     persistOfflineQueue();
-    if (error.code === 'UNAUTHENTICATED') { showToast('Your session expired. Sign in again to sync the queue.', 'error'); showLogin(error.message); return; }
-    setServerStatus('offline', 'Sync unavailable · queue preserved');
-    showToast(`Sync failed; ${state.queuedRequests.length} record(s) remain queued.`, 'error');
+    showToast(state.syncMessage);
+    return;
+  }
+
+  state.syncInProgress = true;
+  state.syncMessage = 'Checking permissions and syncing…';
+  persistOfflineQueue();
+  let syncedCount = 0;
+  const replayOptions = { skipAuthRedirect: true, bypassOfflineQueue: true };
+  try {
+    for (const queued of pending) {
+      await apiRequest(queued.path, { ...queued.options, ...replayOptions });
+      state.queuedRequests.splice(state.queuedRequests.indexOf(queued), 1);
+      syncedCount += 1;
+      persistOfflineQueue();
+    }
+    state.offlineMode = false;
+    await apiRequest('/api/sync', { method: 'POST', body: JSON.stringify({ count: syncedCount }), ...replayOptions });
+    await Promise.all([loadDashboard(), loadItems(), loadWorkOrders(), loadStudentProgress(), loadRisks(), loadAudit()]);
+    state.apiOnline = true;
+    setServerStatus('online', 'Backend connected · Demo data');
+    state.syncMessage = `Sync complete · ${syncedCount} saved`;
+    showToast(state.syncMessage);
+  } catch (error) {
+    const remaining = ownQueuedRequests().length;
+    if (error.status === 401) {
+      state.syncNeedsSignIn = true;
+      state.syncMessage = 'Sign in again to retry sync';
+    } else if (error.status === 403) state.syncMessage = 'Permission denied · queue preserved';
+    else if (error.status === 409) state.syncMessage = 'Conflict · queue preserved for review';
+    else state.syncMessage = remaining ? 'Sync interrupted · queue preserved' : 'Records saved · refresh incomplete';
+    showToast(`${state.syncMessage}. ${syncedCount} saved, ${remaining} pending.`, 'error');
+  } finally {
+    state.syncInProgress = false;
+    persistOfflineQueue();
   }
 }
 
 function toggleOfflineMode() {
+  if (state.syncInProgress) return;
   if (!state.apiOnline) { showToast('后端未连接，无法模拟离线', 'error'); return; }
   state.offlineMode = !state.offlineMode;
+  if (!state.syncNeedsSignIn) state.syncMessage = '';
   persistOfflineQueue();
   setServerStatus(state.offlineMode ? 'offline' : 'online', state.offlineMode ? 'Offline mode · New changes are queued' : 'Backend connected · Demo data');
   showToast(state.offlineMode ? '已进入离线模式，新建操作会暂存' : '已退出离线模式，可以同步队列');
@@ -913,7 +1033,16 @@ document.getElementById('sync-sidebar').addEventListener('click', syncQueue);
 document.getElementById('offline-mode-button').addEventListener('click', toggleOfflineMode);
 document.getElementById('login-form').addEventListener('submit', async event => { event.preventDefault(); const form = new FormData(event.currentTarget); const error = document.getElementById('login-error'); error.textContent = ''; try { await login(form.get('username'), form.get('password')); } catch (err) { error.textContent = err.message; } });
 document.querySelectorAll('[data-demo-account]').forEach(button => button.addEventListener('click', () => { const credentials = { student: ['student', 'student123'], operator: ['operator', 'operator123'], operator_jc: ['operator_jc', 'operator123'], operator_ak: ['operator_ak', 'operator123'], sustainability: ['sustainability', 'sustain123'], admin: ['admin', 'admin123'] }[button.dataset.demoAccount]; document.getElementById('login-username').value = credentials[0]; document.getElementById('login-password').value = credentials[1]; }));
-document.getElementById('logout-button').addEventListener('click', async () => { try { await apiRequest('/api/auth/logout', { method: 'POST' }); } catch (_) {} sessionStorage.removeItem('campusloop-token'); state.token = ''; showLogin(); });
+async function signOut(message = '') {
+  if (state.syncInProgress) return;
+  try { await apiRequest('/api/auth/logout', { method: 'POST', bypassOfflineQueue: true, skipAuthRedirect: true }); } catch (_) {}
+  sessionStorage.removeItem('campusloop-token');
+  state.token = '';
+  state.offlineMode = false;
+  showLogin(message);
+}
+document.getElementById('logout-button').addEventListener('click', () => signOut());
+document.getElementById('sync-reauth').addEventListener('click', () => signOut('Sign in with the submitting account to retry its offline queue.'));
 document.addEventListener('click', async event => { const review = event.target.closest('[data-review-item]'); if (!review) return; if (!['operator','admin'].includes(state.user?.role)) return showToast('当前账户没有人工审核权限', 'error'); try { await apiRequest(`/api/items/${encodeURIComponent(review.dataset.reviewItem)}/review`, { method: 'PATCH', body: JSON.stringify({ decision: review.dataset.reviewStatus }) }); await Promise.all([loadItems(), loadModerationQueue(), loadReviewCenter(), loadDashboard(), loadTodos()]); showToast(review.dataset.reviewStatus === 'approved' ? '资源已通过人工审核' : '资源已驳回'); } catch (error) { handleApiError(error); } });
 document.addEventListener('click', async event => { const save = event.target.closest('[data-save-risk-reviewer]'); if (!save) return; if (!['sustainability','admin'].includes(state.user?.role)) return showToast('当前账户没有分配复核人的权限', 'error'); const row = save.closest('[data-risk-report-row]'); const reviewer = row?.querySelector('[data-risk-reviewer]')?.value; if (!reviewer) return showToast('请选择一名复核人', 'error'); save.disabled = true; try { await apiRequest(`/api/risk-reports/${encodeURIComponent(save.dataset.saveRiskReviewer)}/assign`, { method: 'PATCH', body: JSON.stringify({ reviewer }) }); await Promise.all([loadRiskReports(), loadRiskReviewers(), loadReviewCenter(), loadAudit()]); showToast('风险复核人已保存'); } catch (error) { save.disabled = false; handleApiError(error); } });
 function openRiskReviewModal(id, decision, reviewer) {

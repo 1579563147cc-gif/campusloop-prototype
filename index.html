@@ -55,7 +55,7 @@
         <div class="sidebar-bottom">
           <div class="offline-card">
             <div class="offline-icon">⌁</div>
-            <div><strong id="offline-count">离线队列 03</strong><span id="offline-label">等待同步到云端</span></div>
+            <div><strong id="offline-count">Offline queue 00</strong><span id="offline-label" role="status">No pending records</span></div>
             <button class="mini-icon-button" id="sync-sidebar" aria-label="Sync offline queue">↥</button>
           </div>
           <div class="profile-row">
@@ -73,7 +73,8 @@
             <div class="server-status loading" id="server-status"><span class="status-dot"></span><span id="server-status-text">连接后端中…</span></div>
             <div class="role-switcher-display" id="current-role">设施运营</div>
             <button class="topbar-button" id="offline-mode-button"><span>⌁</span> Simulate offline</button>
-            <button class="topbar-button" id="top-sync"><span>↥</span> Sync <b>3</b></button>
+            <button class="topbar-button" id="top-sync"><span>↥</span> Sync <b>0</b></button>
+            <button class="topbar-button hidden" id="sync-reauth">Sign in again</button>
             <button class="topbar-button icon-only notification-button" data-action="open-notifications" aria-label="通知">♢<span class="notification-dot"></span><span class="notification-count" id="notification-count">0</span></button>
             <div class="topbar-avatar">LM</div>
           </div>

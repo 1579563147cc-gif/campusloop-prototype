@@ -21,7 +21,8 @@ This is the local full-stack prototype for the BUS4093 RFP proposal. The interfa
 - 账户目录和权限修改：`GET /api/users`、`PATCH /api/users/:username`（仅系统管理员）；
 - 审计日志读取：`GET /api/audit`，前端支持 CSV 导出；
 - 离线队列同步：`POST /api/sync`。
-- Offline sync keeps queued records when a request fails and only redirects to sign-in for a confirmed expired session; permission or network failures do not silently discard the queue;
+- Offline sync keeps pending records on the device after a network, permission, conflict, or session failure. Sync shows the reason in the workspace. If the session expires, choose **Sign in again**, sign in with the same account, and retry. The queue is scoped to its submitting account. Older entries without an account stay in browser storage and are excluded from replay.
+- A successful replay removes the acknowledged entry and refreshes the workspace. The prototype blocks overlapping sync attempts within one page. Durable duplicate detection and a shared conflict review workflow are proposed deployment requirements.
 - Student facilities requests receive a server-generated persistent ID such as `WO-2042`, which is reused in the student progress view, operator queue, notifications and audit log;
 - Risk levels are calculated from probability × impact: 1–4 Low, 5–9 Medium, 10–16 High, 17–25 Critical;
 - 角色切换：学生、设施运营、可持续管理员、系统管理员；
