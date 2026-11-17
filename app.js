@@ -20,6 +20,8 @@ const state = {
   notificationUnread: 0,
   users: [],
   evidence: [],
+  interviews: [],
+  rewards: null,
   metrics: {},
   orderFilter: 'all',
   assignees: [],
@@ -27,17 +29,109 @@ const state = {
   lastOrdersRefresh: null
 };
 
-const pageLabels = { overview: '总览', exchange: '资源交换', operations: '设施运营', impact: '影响仪表板', governance: '治理与风险', implementation: '实施路线', evidence: '研究证据' };
+const pageLabels = { overview: 'Overview', exchange: 'Resource exchange', operations: 'Facilities operations', impact: 'Impact dashboard', governance: 'Governance & risk', implementation: 'Implementation', evidence: 'Research evidence' };
 const modalRoot = document.getElementById('modal-root');
 const toast = document.getElementById('toast');
 const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:4173' : '';
 let toastTimer;
-const roleLabels = { student: '学生用户', operator: '设施运营', sustainability: '可持续管理员', admin: '系统管理员' };
+const roleLabels = { student: 'Student', operator: 'Facilities operator', sustainability: 'Sustainability admin', admin: 'System administrator' };
 const roleDescriptions = { student: 'Student user', operator: 'Campus operator', sustainability: 'Sustainability admin', admin: 'System administrator' };
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
 }
+
+const englishUiMap = {
+};
+
+Object.assign(englishUiMap, {
+  '复核账户：':'Review account: ','权限目录':'Access directory','保存负责人':'Save owner','已完成领取者回访。':'Recipient follow-up completed.','处理记录':'Work notes','写入审计':'Added to audit log','暂无处理备注':'No work notes yet','暂无现场证据':'No field evidence yet','补充处理备注':'Add a work note','证据名称或照片编号':'Evidence name or photo reference','保存记录':'Save record','请填写备注或证据名称':'Enter a note or evidence name','处理记录已保存':'Work record saved',
+  '总览': 'Overview', '资源交换': 'Resource exchange', '设施运营': 'Facilities operations', '影响仪表板': 'Impact dashboard', '治理与风险': 'Governance & risk', '实施路线': 'Implementation', '研究证据': 'Research evidence', '项目设置': 'Workspace settings', '帮助中心': 'Help centre', '离线队列': 'Offline queue', '等待同步到云端': 'Waiting to sync to the server', '当前处于离线模式': 'Offline mode is active', '模拟离线': 'Simulate offline', '退出离线': 'Exit offline mode', '同步': 'Sync', '当前状态': 'Current status', '当前负责人': 'Current owner', '负责人': 'Owner', '复核人': 'Reviewer', '待处理': 'Pending', '处理中': 'In progress', '待清运': 'Awaiting collection', '已完成': 'Completed', '待审核': 'Pending review', '审核中': 'Under review', '审核完成': 'Review completed', '已打回': 'Returned for revision', '已驳回': 'Rejected', '待分配': 'Unassigned', '待领取': 'Available for collection', '待捐赠': 'Pending donation', '待维修': 'Awaiting repair', '维修中': 'Repair in progress', '维修后再利用': 'Reused after repair', '已完成再利用': 'Reuse completed', '监控中': 'Monitoring', '已缓解': 'Mitigated', '已关闭': 'Closed', '上报风险': 'Report risk', '登记风险': 'Register risk', '风险登记表': 'Risk register', '风险上报审核': 'Risk-report review', '人工审核': 'Human review', '资源发布审核': 'Resource publishing review', '审核': 'Review', '通过': 'Approve', '驳回': 'Reject', '保存': 'Save', '关闭': 'Close', '取消': 'Cancel', '查看全部': 'View all', '查看详情': 'View details', '详情': 'Details', '新建工单': 'New work order', '报告设施问题': 'Report a facilities issue', '提交问题': 'Submit request', '创建工单': 'Create work order', '工单名称': 'Work-order title', '问题标题': 'Issue title', '问题描述': 'Issue description', '处理说明': 'Handling notes', '地点': 'Location', '类型': 'Type', '截止时间': 'Due time', '优先级': 'Priority', '数量': 'Quantity', '添加证据记录': 'Add evidence', '已录入记录': 'Recorded evidence', '风险项': 'Risk items', '开放工单': 'Open work orders', '今日待清运': 'Collections today', '平均处理时长': 'Average handling time', '离线待同步': 'Offline items to sync', '实时': 'Live', '实时路线': 'Live route', '实时指标快照': 'Live KPI snapshot', '数据完整度': 'Data completeness', '目标与实际': 'Target vs actual', '目标': 'Target', '当前值': 'Current', '差距': 'Gap', '指标': 'Metric', '影响对象': 'Affected groups', '缓解措施': 'Mitigation', '操作审计': 'Audit log', '审计报告': 'Audit report', '报告中心': 'Report centre', '导出': 'Export', '复制路线摘要': 'Copy route summary', '复制摘要': 'Copy summary', '加入行动清单': 'Add to action list', '路线视图': 'Route view', '全部': 'All', '我的': 'Mine', '需要关注': 'Needs attention', '无关键风险': 'No critical risks', '合规状态良好': 'Compliance status is good', '运行正常': 'Operating normally', '试点进行中': 'Pilot in progress', '数据完整度': 'Data completeness', '本学期': 'This term', '本月避免填埋': 'Landfill avoided this month', '过去 7 天': 'Past 7 days', '过去两周': 'Past two weeks', '今天': 'Today', '昨天': 'Yesterday', '刚刚': 'Just now', '待确认': 'To be confirmed', '待安排': 'To be scheduled', '高': 'High', '中': 'Medium', '低': 'Low', '风险': 'Risk', '设施': 'Facilities', '资源': 'Resource', '书籍': 'Books', '家具': 'Furniture', '电子产品': 'Electronics', '电子': 'Electronics', '交通': 'Transport', '生活用品': 'Household items', '其他': 'Other', '件': 'items', '项': 'items', '条': 'records', '小时': 'hours', '站点': 'sites', '上报': 'Report', '发布资源': 'Publish resource', '发布': 'Publish', '流转': 'Lifecycle', '完成': 'Completed', '进行中': 'In progress', '逾期': 'Overdue', '状态': 'Status', '等级': 'Level', '再利用率': 'Reuse rate', '账户目录': 'Account directory', '账户与权限': 'Accounts & permissions', '退出登录': 'Sign out', '通知': 'Notifications', '权限复核': 'Access review', '数据治理': 'Data governance', '预算边界': 'Budget boundary', '原型边界': 'Prototype boundary', '人工监督': 'Human oversight', '学生参与': 'Student participation', '影响看板': 'Impact dashboard', '系统连接边界': 'System integration boundary', '需求—功能—指标追踪': 'Requirement–feature–metric traceability', '需求与用户研究': 'Requirements and user research', '学生身份': 'Student identity', '学生访谈 + 资源日志': 'Student interviews + resource logs', '仪表盘快照 + 季度报告': 'Dashboard snapshot + quarterly report', '已复核': 'Reviewed', '已启用': 'Active', '已优化': 'Optimised', '最后Sync：': 'Last sync: ', '最近 30 天': 'Past 30 days', 'Books与纸张': 'Books and paper', '早上好，': 'Good morning, ',
+  '把ResourceLifecycle转化为可解释、可审计的校园可持续成果。': 'Turn the resource lifecycle into explainable and auditable campus sustainability outcomes.',
+  '保留期限': 'Retention period', '本地队列': 'Local queue', '混合物资': 'Mixed materials', '退宿季资源回收行动': 'Move-out resource recovery action',
+  '完成Access review this week': 'Complete access review this week', '危险物品、异常交易和激励申诉进入Human review队列。': 'Hazardous items, anomalous transactions and incentive appeals enter the human review queue.',
+  '系统连接边界': 'System integration boundary', '需求—功能—指标追踪': 'Requirement–feature–metric traceability', '需求与用户研究': 'Requirements and user research',
+  '学生不知道闲置物品去哪里': 'Students cannot see where idle items should go', '学生访谈 + Resource日志': 'Student interviews + resource logs', '学生身份': 'Student identity',
+  '学生提交 · 等待内容Review': 'Student submission · content review pending', '仪表盘快照 + 季度报告': 'Dashboard snapshot + quarterly report', '已复核': 'Reviewed', '已启用': 'Active', '已优化': 'Optimised',
+  '影响看板': 'Impact dashboard', '用最少的数据完成必要的服务，用清晰的责任保证每一次处理可追溯。': 'Use only the data needed for service delivery and make every action traceable through clear ownership.',
+  '逾期': 'Overdue', '预计节省': 'Estimated saving', '预算边界': 'Budget boundary', '原型边界': 'Prototype boundary', '再利用率': 'Reuse rate', '早上好，': 'Good morning, ',
+  '账户目录状态': 'Account directory status', '账户与权限': 'Accounts & permissions', '这里只处理学生和Facilities人员主动Report的Risk；Approve后才会写入Risk register。': 'This queue handles risks reported by students and facilities staff; approved reports are added to the risk register.',
+  '正式投标阶段应进一步拆分许可、集成、安全、培训和预留费用。': 'The formal bid should split licensing, integration, security, training and contingency costs.', '重置演示数据': 'Reset demo data', '状态': 'Status',
+  '准时完成': 'On-time completion', '最后Sync：': 'Last sync: ', '最近 30 天': 'Past 30 days', 'Books与纸张': 'Books and paper', '退出登录': 'Sign out', '通知': 'Notifications',
+  '本地 Node 服务和 JSON 数据文件': 'local Node service and JSON data file', '今天优先处理': 'Today’s priority', '实时计算': 'Calculated live', '账户目录': 'Account directory',
+  '风险登记表': 'Risk register', '权限复核': 'Access review', '数据治理': 'Data governance', '交付阶段': 'Delivery phase', '设施问题和风险上报会在这里持续更新。': 'Facilities issues and risk reports are updated here continuously.',
+  '学生提交 · 等待内容审核': 'Student submission · content review pending', '完成本周权限复核': 'Complete this week’s access review', '学生访谈 + 资源日志': 'Student interviews + resource logs', '本周权限复核': 'Access review this week', '访谈学生、设施人员和可持续发展办公室，确定流程边界、字段和成功指标。': 'Interview students, facilities staff and the sustainability office to define process boundaries, fields and success metrics.', '分享视图': 'Share view', '个站点 · 12.4 km': 'sites · 12.4 km', '工单看板': 'Work-order board', '工单看板 · SLA 逾期率': 'Work-order board · SLA overdue rate', '工单历史 + 处理时长': 'Work-order history + handling time', '工单准时完成': 'On-time work orders', '贡献最多的地点': 'Top contributing locations', '管理层无法判断投资效果': 'Management cannot see investment outcomes', '后端资源目录': 'Backend resource directory', '回收与捐赠': 'Collection & donation', '活跃资源': 'Active resources', '集成与安全': 'Integration & security', '继续留在校园循环中。': 'Keep it in the campus loop.', '角色和启停状态会写入后端数据文件；已停用账户无法继续登录，当前管理员账户不能自我降级。': 'Roles and activation status are persisted; disabled accounts cannot sign in and the current admin cannot demote itself.', '较上月同期': 'Compared with last month', '截止今天': 'Due today', '学生提交 · 等待内容审核': 'Student submission · content review pending', '完成本周权限复核': 'Complete this week’s access review', '建议在退宿高峰期将临时领取点前移到大堂，并由学生大使提供扫码协助。': 'During move-out peaks, move the temporary collection point to the lobby and provide QR assistance through student ambassadors.', '0 条记录': '0 records', '14 个设施工单': '14 facilities work orders', '3 条离线记录': '3 offline records', '按避免填埋量': 'By landfill avoided', '按已完成再利用计算': 'Calculated from completed reuse', '把领取点前移到 B 区大堂': 'Move the collection point to the Residence B lobby', '本月已经让': 'This month we have kept', '本周新增领取点：': 'New collection point this week: ', '比较再利用率、处理时长、参与率和数据完整度，修正流程与激励机制。': 'Compare reuse rate, handling time, participation and data completeness to refine the workflow and incentives.', '避免填埋趋势': 'Landfill avoided trend', '查看本轮更新': 'View this cycle’s update', '查看风险 →': 'View risks →', '从可验证的 Residence B–D 试点开始，再根据指标扩大到全校。': 'Start with a verifiable Residence B–D pilot and scale using measured results.', '打开账户目录': 'Open account directory', '待处理总览': 'Workflow overview', '待开始': 'Not started', '当前有': 'Current', '第二年维护与支持': 'Year 2 maintenance and support', '第三年维护与扩展': 'Year 3 maintenance and expansion', '第一阶段使用结构化 API 和 CSV 交换，避免让单一系统成为故障点。': 'Phase 1 uses structured API and CSV exchange to avoid a single system becoming a failure point.', '第一年实施': 'Year 1 implementation', '动态指标、SLA 和 RFP 验收链路已接入': 'Live metrics, SLA and RFP acceptance traceability are connected.', '当前版本用于课程演示': 'This version is for course demonstration', '正式部署应替换为数据库、密码哈希、对象存储、细粒度权限和备份策略。': 'A production deployment should use a database, password hashing, object storage, fine-grained permissions and backups.', '退宿高峰期': 'move-out peak', '退宿季试点进入第 3 周。今天优先处理': 'The move-out pilot is in week 3. Today’s priority is', '从发现问题到完成回收，每一个工单都有负责人。': 'Every request has an owner from issue discovery to completion.', '动态指标': 'Live metrics', '平台与运营模块': 'Platform and operations modules', '交接记录保留 12 个月，聚合指标长期保存且去标识化。': 'Handover records are retained for 12 months; aggregated metrics are retained long term and de-identified.'
+});
+
+Object.assign(englishUiMap, {
+  '工单': 'Work order', '今日待办': 'Today’s tasks', '今日清运路线': 'Today’s collection route', '仅保留服务所需字段，默认不收集身份证明以外的敏感资料。': 'Only service-required fields are retained; sensitive data is not collected by default.', '仅系统管理员可修改': 'Only system administrators can edit', '进入预约流转。': 'Enter the reservation lifecycle.', '了解更多 →': 'Learn more →', '连接身份、资产和设施系统，逐步评估传感器或预测分析的必要性。': 'Connect identity, asset and facilities systems, then assess the need for sensors or predictive analytics.', '明细': 'Details', '模拟报价': 'Illustrative quote', '模拟商业边界': 'Illustrative commercial boundary', '模拟数据基于 3 个住宿区和 2 个设施运营点，用于展示提案中的指标设计。': 'Demonstration data uses three residences and two facilities points to illustrate the proposal metrics.', '年度维护': 'Annual maintenance', '评分': 'Rating', '评估与调整': 'Evaluate and adjust', '全校推广': 'Campus-wide rollout', '确认 North Residence B 区清运': 'Confirm Residence B collection', '让每一件物品找到下一次使用的机会。': 'Give every item a next use.', '三年总拥有成本': 'Three-year total cost of ownership', '筛选': 'Filter', '上线资源交换、工单、二维码交接和离线队列，建立第一版基线。': 'Launch resource exchange, work orders, QR handover and the offline queue to establish the baseline.', '实施 + 两年维护': 'Implementation + two years maintenance', '实施预算 · 上限 USD 750,000': 'Implementation budget · USD 750,000 cap', '和': 'and'
+});
+
+Object.assign(englishUiMap, {
+  '请先登录': 'Please sign in first', '试点健康度': 'Pilot health', '试点与学生大使': 'Pilot and student ambassadors', '数据每 6 小时更新': 'Data refreshes every 6 hours', '数据最小化': 'Data minimisation', '提交设施问题或风险后，你可以在这里跟踪处理进度。': 'Track progress here after submitting a facilities issue or risk.', '危险物品、异常交易和激励申诉进入Human review队列。': 'Hazardous items, anomalous transactions and incentive appeals enter the human review queue.', '这里只处理学生和Facilities人员主动Report的Risk；Approve后才会写入Risk register。': 'This queue handles risks reported by students and facilities staff; approved reports are added to the risk register.', '正在加载你的上报记录': 'Loading your reports', '正在加载审计日志…': 'Loading audit log…', '正在加载账户目录…': 'Loading account directory…', '正在加载实时状态…': 'Loading live status…', '正在加载资源队列…': 'Loading resource queue…'
+});
+
+Object.assign(englishUiMap, {
+  '危险物品、异常交易and激励申诉进入Human review队列。': 'Hazardous items, anomalous transactions and incentive appeals enter the human review queue.',
+  '这里只处理学生andFacilities人员主动Report的Risk；Approve后才会写入Risk register。': 'This queue handles risks reported by students and facilities staff; approved reports are added to the risk register.',
+  '正在加载RiskReport…': 'Loading risk reports…', '正在加载Workflow overview…': 'Loading workflow overview…', 'Resource循环量趋势图': 'Resource lifecycle trend chart',
+  '设施问题无法追踪': 'Facilities issues cannot be tracked', '家具与木材': 'Furniture and timber', '搜索物品、地点或编号': 'Search items, locations or IDs', '项目管理与预留': 'Project management and contingency',
+  '我的上报进度': 'My report progress', '本周新增领取点：North Residence B 区一层服务台 · 现场支持离线登记': 'New collection point this week: Residence B ground-floor service desk · offline field support',
+  '过去两周，B 区的家具领取完成率比其他地点高': 'Over the past two weeks, Residence B furniture collection completion was higher than other locations.',
+  '发布审核决定资源能否进入交换；学生预约后会自动生成交接任务，运营人员在这里继续分配和完成。': 'Publishing review determines whether a resource enters exchange; student reservations create a handover task for operations to assign and complete.',
+  '报告中心可查看当前指标、目标与实际；设施运营可记录处理证据，风险审核可填写复核意见。': 'The report centre shows current metrics, targets and actuals; facilities operations can record evidence and risk reviewers can add decisions.',
+  '资源交换 · 领取完成率': 'Resource exchange · collection completion rate', '已有': 'already have', '资源构成': 'Resource composition', '资源循环量': 'Resource lifecycle volume', '资源审核与交接': 'Resource review and handover',
+  '审核 8 条新资源发布': 'Review 8 new resource postings', '复核人分配 · 审核完成率': 'Reviewer assignment · review completion rate', 'RFP 验收依据': 'RFP acceptance basis', '风险上报缺少责任人': 'Risk reports lack accountable owners', '风险审核记录 + 审计日志': 'Risk review records + audit log',
+  'Residence B–D 试点': 'Residence B–D pilot', '选择时间范围': 'Select time range', 'Landfill avoided trend折线图': 'Landfill avoided trend line chart', '当前版本用于课程演示，使用local Node service and JSON data file。正式部署应替换为数据库、密码哈希、对象存储、细粒度权限和备份策略。': 'This version is for course demonstration with a local Node service and JSON data file. A production deployment should use a database, password hashing, object storage and backups.', 'USD 170,000 / 年': 'USD 170,000 / year',
+  '数据每 6 hours更新': 'Data refreshes every 6 hours', 'Residence B 区一层服务台 · 现场支持离线登记': 'Residence B ground-floor service desk · offline field support', 'B 区': 'Residence B', '领取完成率': 'collection completion rate', '审核完成率': 'review completion rate'
+});
+
+Object.assign(englishUiMap, {
+  'Resource lifecycle volume趋势图': 'Resource lifecycle volume trend chart',
+  'Resource等Pending review，已有': 'Resources pending review; already have',
+  'Resource等Pending review': 'Resources pending review',
+  '，already have': '; already have',
+  '，使用local Node service and JSON data file。A production deployment should use a database, password hashing, object storage, fine-grained permissions and backups。': ' with a local Node service and JSON data file. A production deployment should use a database, password hashing, object storage and backups.',
+  'This version is for course demonstration，使用local Node service and JSON data file。A production deployment should use a database, password hashing, object storage, fine-grained permissions and backups。': 'This version is for course demonstration with a local Node service and JSON data file. A production deployment should use a database, password hashing, object storage and backups.'
+});
+
+// English display copy for the bundled demonstration records and workflows.
+Object.assign(englishUiMap, {
+  '木质学习桌':'Wooden study desk','Dell 24″ 显示器':'Dell 24-inch monitor','城市通勤自行车':'Commuter bicycle','课程教材组合':'Course textbook set','折叠椅 × 4':'Folding chairs × 4','小型投影仪':'Compact projector','收纳箱 × 8':'Storage boxes × 8','白板与支架':'Whiteboard and stand','人体工学办公椅':'Ergonomic office chair','统计学教材套装':'Statistics textbook set','USB-C 扩展坞':'USB-C docking station','宿舍收纳架 × 3':'Residence storage racks × 3','折叠会议桌':'Folding meeting table','便携音箱':'Portable speaker',
+  '避免 18 kg 废弃物':'18 kg of waste avoided','避免 12 kg 废弃物':'12 kg of waste avoided','避免 9 kg 废弃物':'9 kg of waste avoided','避免 6 kg 废弃物':'6 kg of waste avoided','避免 14 kg 废弃物':'14 kg of waste avoided','避免 8 kg 废弃物':'8 kg of waste avoided','避免 3 kg 废弃物':'3 kg of waste avoided','预计惠及 6 位学生':'Estimated to benefit 6 students','预计惠及 4 位学生':'Estimated to benefit 4 students','延长 2 年使用期':'Extends useful life by 2 years','支持社团共享':'Supports student society sharing','支持课程共享':'Supports course sharing','匿名学生':'Anonymous student','服务台':'Service desk','学习用品':'Study supplies','天前':' days ago','小时前':' hours ago','上周':'Last week',
+  'B 区家具集中清运':'Residence B furniture collection','电子产品安全检查':'Electronics safety inspection','回收点标识更新':'Update collection point signage','书籍领取点补货':'Restock the book collection point','上周纸张回收核对':'Verify last week’s paper collection','宿舍 C 区维修回访':'Residence C repair follow-up','标识':'Signage','纸张':'Paper','维修':'Repair','清运':'Collection',
+  'Wi-Fi 中断导致工单无法更新':'Wi-Fi outage prevents work order updates','奖励机制造成不公平参与':'Incentive design may create unequal participation','危险物品误发布':'Hazardous items posted by mistake','设施团队、学生':'Facilities staff and students','低带宽用户、残障用户':'Low-bandwidth users and users with disabilities','领取者、设施团队':'Recipients and facilities staff','离线队列 + 纸面备用表 + 恢复后冲突检查':'Offline queue, paper backup and conflict checks after reconnection','不以个人排名为唯一激励，保留人工申诉和替代渠道':'Avoid relying on individual rankings; provide human appeals and alternative channels','分类规则、关键词拦截、人工审核和下架审计':'Classification rules, keyword screening, human review and removal audit','运营负责人':'Operations lead','治理负责人':'Governance lead','学生大使':'Student ambassador',
+  '报告中心可查看当前指标、目标与实际；设施运营可记录处理证据，风险审核可填写复核意见。':'The report centre compares actual metrics with targets. Facilities staff can record evidence and risk reviewers can add comments.','我的上报进度':'My reports','还没有上报记录':'No reports yet','当前没有待审核发布或待处理交接任务。':'There are no resource listings or handovers awaiting review.','新建一条待审核资源':'Create a resource listing','当前没有待审核的风险上报。':'There are no risk reports awaiting review.','当前分类没有待处理事项。':'There are no pending items in this category.','处理资源名称、分类、地点和领取信息':'Review the resource name, category, location and collection details','通过后才会写入正式风险登记表':'Approved reports are added to the risk register','未分配或已超过截止时间的设施工单':'Unassigned or overdue facilities work orders','定位资源队列':'Open resource queue','定位风险队列':'Open risk queue','打开工单看板':'Open work-order board','条资源等待审核':' resources awaiting review','条风险上报等待审核':' risk reports awaiting review','项工单需要跟进':' work orders require follow-up','项待处理':' pending','项待审核':' awaiting review','项':' items','条记录':' records',
+  '最近登录':'Last signed in','尚未登录':'Never signed in','启用':'Active','停用':'Disabled','登录系统':'Signed in','暂无操作记录。':'No audit entries yet.','演示数据':'Demo data',
+  '资源详情与流转':'Resource details and lifecycle','领取/交接地点':'Collection or handover location','可预约后按地点领取':'Reserve first, then collect at this location','维修完成后恢复领取':'Available after repair','按当前流程节点处理':'Follow the current workflow','发布者':'Posted by','当前处理人':'Current handler','循环价值':'Circular impact','更新时间':'Updated','资源发布':'Resource posted','资源已进入 CampusLoop':'Resource added to CampusLoop','等待审核分类、地点和安全信息':'Awaiting category, location and safety review','审核节点已完成':'Review completed','待认领维修':'Awaiting repair assignment','维修人员已接手处理':'Repair assigned to a technician','等待维修清运人员认领':'Awaiting a facilities operator','已计入再利用率和避免填埋量':'Included in reuse and landfill diversion metrics','领取学生':'Student recipient','可在指定地点预约领取':'Reserve for collection at the listed location','等待审核完成':'Awaiting review','查看处理进度':'View progress','预约领取':'Reserve for collection','认领维修':'Claim repair','完成维修并开放领取':'Complete repair and reopen for collection','登记完成再利用':'Record completed reuse','请在交接工单中继续处理':'Continue in the handover work order','查看状态':'View status',
+  '当前为本地演示环境。离线模式、自动刷新和数据写入都由当前浏览器与本地 Node 服务控制。':'This is a local demonstration. Offline mode, automatic refresh and data storage are handled by this browser and the local Node service.','如需切换账号，请点击右上角退出后重新登录。':'To switch accounts, sign out and then sign in again.','知道了':'Got it','资源交换：发布资源后会进入人工审核队列，学生可预约已通过审核的资源。':'Resource exchange: listings are reviewed before students can reserve them.','设施运营：负责人只能推进自己负责的工单，管理员可以查看全部工单。':'Facilities: assigned staff can advance their work orders; administrators can view all orders.','治理与风险：可持续管理员和系统管理员可以登记、更新风险。':'Governance: sustainability and system administrators can register and update risks.','工单页面每 15 秒刷新一次，页面上的时间会显示最近一次后端同步。':'The work-order page refreshes every 15 seconds and shows the latest update time.','搜索物品、地点或编号':'Search items, locations or IDs','编辑状态':'Edit status',
+  '项逾期':' overdue','件':'items','项':'items','Books与Paper':'Books and paper','工单状态':'Work order status','资源状态':'Resource status','风险审核':'Risk review','当前状态：':'Current status: ','已预约':'Reserved','已发布':'Posted','待同步':'Waiting to sync','待估算影响':'Impact pending assessment','设施运营 / 系统管理员':'Facilities operations / system administrator','设施运营人员':'Facilities operator','设施运营团队':'Facilities operations team','资源交接':'Resource handover','系统管理员':'System administrator','待安排':'To be scheduled','待确认地点':'Location to be confirmed','暂无风险记录':'No risk records','暂无账户记录。':'No accounts found.','当前没有待办事项。':'There are no tasks yet.','正在加载待处理总览…':'Loading workflow overview…','正在加载风险上报…':'Loading risk reports…','正在加载你的上报记录':'Loading your reports','正在加载实时状态…':'Loading live status…','正在加载资源队列…':'Loading resource queue…'
+});
+
+function translateUi(root = document.body) {
+  if (!root) return;
+  const replacements = Object.entries(englishUiMap).sort((a, b) => b[0].length - a[0].length);
+  const translate = input => {
+    const trimmed = input.trim();
+    if (Object.hasOwn(englishUiMap, trimmed)) return input.replace(trimmed, englishUiMap[trimmed]);
+    // Replace whole phrases in one pass. Single characters inside Chinese words
+    // must never be translated independently (e.g. 中 in 中断).
+    const phrases = replacements.filter(([key]) => key.length > 1 && /[\u3400-\u9fff]/.test(key));
+    const pattern = new RegExp(phrases.map(([key]) => key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+    return input.replace(pattern, match => englishUiMap[match])
+      .replace(/(\d+)\s*项/g, '$1 items')
+      .replace(/(\d+)\s*件/g, '$1 items');
+  };
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const textNodes = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode);
+  textNodes.forEach(node => { if (node.parentElement?.closest('script, style')) return; const option = node.parentElement?.closest('option'); if (option && !option.hasAttribute('value')) option.value = option.textContent; const value = translate(node.nodeValue); if (value !== node.nodeValue) node.nodeValue = value; });
+  root.querySelectorAll?.('[placeholder], [aria-label], [data-title], [title]').forEach(element => { ['placeholder', 'aria-label', 'data-title', 'title'].forEach(attribute => { const value = element.getAttribute(attribute); if (value) { const translated = translate(value); if (translated !== value) element.setAttribute(attribute, translated); } }); });
+}
+
+const englishUiObserver = new MutationObserver(() => translateUi(document.body));
+englishUiObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+translateUi(document.body);
 
 function showToast(message, tone = 'success') {
   document.getElementById('toast-message').textContent = message;
@@ -73,12 +167,13 @@ function queueOfflineRequest(path, options) {
 }
 
 async function apiRequest(path, options = {}) {
-  const requestOptions = { headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }, ...options };
+  const { skipAuthRedirect = false, ...requestConfig } = options;
+  const requestOptions = { headers: { 'Content-Type': 'application/json', ...(requestConfig.headers || {}) }, ...requestConfig };
   if (state.token) requestOptions.headers.Authorization = `Bearer ${state.token}`;
   if (state.offlineMode && requestOptions.method && requestOptions.method !== 'GET') return queueOfflineRequest(path, requestOptions);
   const response = await fetch(`${API_BASE}${path}`, requestOptions);
   const payload = await response.json().catch(() => ({}));
-  if (response.status === 401 && path !== '/api/auth/login') { showLogin(); throw new Error('登录已失效，请重新登录'); }
+  if (response.status === 401 && path !== '/api/auth/login') { const error = new Error('Session expired. Please sign in again.'); error.code = 'UNAUTHENTICATED'; if (!skipAuthRedirect) showLogin(error.message); throw error; }
   if (!response.ok) throw new Error(payload.error?.message || `请求失败（${response.status}）`);
   return payload;
 }
@@ -126,7 +221,7 @@ async function login(username, password) {
 
 async function loadAuthenticatedData() {
   setServerStatus('loading', '加载工作空间…');
-  await Promise.all([loadDashboard(), loadTodos(), loadReviewCenter(), loadNotifications(), loadItems(), loadWorkOrders(), loadStudentProgress(), loadRisks(), loadRiskReports(), loadRiskReviewers(), loadModerationQueue(), loadAudit(), loadUsers(), loadEvidence(), loadAssignees()]);
+  await Promise.all([loadDashboard(), loadTodos(), loadReviewCenter(), loadNotifications(), loadItems(), loadWorkOrders(), loadStudentProgress(), loadRisks(), loadRiskReports(), loadRiskReviewers(), loadModerationQueue(), loadAudit(), loadUsers(), loadEvidence(), loadAssignees(), loadRewards()]);
   setServerStatus('online', '已登录 · 后端已连接');
   persistOfflineQueue();
   startLiveRefresh();
@@ -136,6 +231,25 @@ async function loadDashboard() {
   const payload = await apiRequest('/api/dashboard');
   state.metrics = payload.metrics || {};
   renderDashboard();
+}
+
+async function loadRewards() {
+  if (state.user?.role !== 'student') { state.rewards = null; return; }
+  state.rewards = await apiRequest('/api/rewards/me');
+  const { total, monthly, monthlyCap } = state.rewards;
+  setText('reward-total', total);
+  setText('reward-monthly', `${monthly} / ${monthlyCap}`);
+  const milestone = total >= 100 ? 'Circular Champion' : total >= 50 ? 'Reuse Advocate' : total >= 10 ? 'Loop Starter' : 'Your first reuse starts your journey';
+  setText('reward-badge', milestone);
+  const bar = document.getElementById('reward-progress');
+  if (bar) bar.style.width = `${Math.min(100, monthlyCap ? monthly / monthlyCap * 100 : 0)}%`;
+}
+
+function openRewards() {
+  if (state.user?.role !== 'student' || !state.rewards) return;
+  const rewards = state.rewards;
+  const entries = rewards.entries.map(entry => `<div class="reward-entry"><div><strong>${escapeHtml(entry.itemName)}</strong><small>${escapeHtml(entry.itemId)} · ${escapeHtml(entry.at.slice(0, 10))} · ${escapeHtml(entry.reason)}</small></div><b>+${entry.points}</b></div>`).join('');
+  openModal(`<div class="modal-head"><div><p class="panel-kicker">PRIVATE REWARDS · DEMONSTRATION</p><h2>My reward activity</h2><p>Points recognise completed reuse. Only your account can view this activity.</p></div><button class="close-modal" data-close-modal="true" aria-label="Close">×</button></div><div class="reward-rules"><strong>How it works</strong><p>Earn ${rewards.pointsPerReuse} points per completed resource, up to ${rewards.monthlyCap} points per UTC calendar month. A resource counts once per student. No public ranking or point deductions.</p><p>Badges are illustrative milestones, not vouchers or a promise of real-world benefits. Demo records do not earn points. Existing activity is not credited retroactively.</p></div><h3 class="reward-history-heading">Recent activity</h3><div class="reward-history">${entries || '<p class="empty-inline">No points yet. Complete a resource handover to get started.</p>'}</div><div class="modal-actions"><button class="button primary" data-close-modal="true">Close</button></div>`);
 }
 
 async function loadTodos() {
@@ -208,7 +322,7 @@ function startLiveRefresh() {
     if (!state.user || !state.apiOnline) return;
     try {
       if (state.activePage === 'operations') await Promise.all([loadWorkOrders(), loadDashboard()]);
-      if (state.activePage === 'overview') await Promise.all([loadDashboard(), loadTodos(), loadNotifications(), loadStudentProgress()]);
+      if (state.activePage === 'overview') await Promise.all([loadDashboard(), loadTodos(), loadNotifications(), loadStudentProgress(), loadRewards()]);
       if (state.activePage === 'governance') await Promise.all([loadRisks(), loadRiskReports(), loadRiskReviewers(), loadReviewCenter(), loadModerationQueue(), loadAudit(), loadUsers()]);
     } catch (error) { handleApiError(error); }
   }, 15000);
@@ -258,9 +372,9 @@ async function loadUsers() {
 }
 
 async function loadEvidence() {
-  if (!['operator', 'sustainability', 'admin'].includes(state.user?.role)) return;
   const payload = await apiRequest('/api/evidence');
   state.evidence = payload.evidence || [];
+  state.interviews = state.evidence.filter(entry => entry.type === 'Primary interview evidence');
   renderEvidence();
 }
 
@@ -305,6 +419,7 @@ function renderDashboard() {
   setText('overview-open-orders', metrics.openOrders ?? '—');
   setText('overview-orders-overdue', `${metrics.overdueOrders ?? 0} 项逾期`);
   setText('overview-reuse-rate', `${metrics.reuseRate ?? '—'}%`);
+  setText('reuse-basis', `${metrics.completedReuseItems ?? 0} completed / ${metrics.activeItems ?? 0} eligible items`);
   setText('overview-avoided-kg', `${metrics.avoidedKg ?? 0} kg`);
   setText('overview-published-items', metrics.activeItems ?? '—');
   setText('overview-pending-items', metrics.pendingItems ?? '—');
@@ -315,7 +430,7 @@ function renderDashboard() {
   setText('ops-pickup-sites', metrics.pickupSites ?? '—');
   setText('ops-completion-rate', metrics.completionRate ?? '—');
   setText('ops-offline-queue', metrics.offlineQueue ?? state.queuedRequests.length);
-  setText('chart-avoided-kg', `${metrics.avoidedKg ?? 0} kg`);
+  setText('chart-avoided-kg', `${(metrics.trend || []).reduce((total, point) => total + (Number(point.value) || 0), 0)} completed items`);
   setText('impact-avoided-kg', `${metrics.avoidedKg ?? 0} kg`);
   setText('mix-avoided-kg', metrics.avoidedKg ?? 0);
   setText('impact-reuse-rate', `${metrics.reuseRate ?? '—'}%`);
@@ -331,11 +446,11 @@ function renderDashboard() {
   setText('pilot-participation', `${metrics.pilotHealth?.participation ?? '—'}%`); setText('pilot-on-time', `${metrics.pilotHealth?.onTime ?? '—'}%`); setText('pilot-data-completeness', `${metrics.pilotHealth?.dataCompleteness ?? '—'}%`);
   const pilotBarIds = { participation: 'pilot-participation-bar', onTime: 'pilot-on-time-bar', dataCompleteness: 'pilot-data-completeness-bar' };
   Object.entries(pilotBarIds).forEach(([key, id]) => { const bar = document.getElementById(id); if (bar) bar.style.width = `${metrics.pilotHealth?.[key] ?? 0}%`; });
-  const bars = [...document.querySelectorAll('#page-overview .bar-group')]; const trend = metrics.trend || []; const maxTrend = Math.max(...trend.map(point => Number(point.value) || 0), 1); bars.forEach((group, index) => { const point = trend[index]; if (!point) return; const value = Number(point.value) || 0; const valueNode = group.querySelector('.bar-value'); const bar = group.querySelector('.bar'); const label = group.querySelector('span:last-child'); if (valueNode) valueNode.textContent = value; if (bar) bar.style.height = `${Math.max(18, Math.round(value / maxTrend * 100))}%`; if (label) label.textContent = point.label; });
-  const linePoints = trend.map((point, index) => [index * (720 / Math.max(trend.length - 1, 1)), 220 - ((Number(point.value) || 0) / maxTrend) * 195]); if (linePoints.length > 1) { const linePath = linePoints.map((point, index) => `${index ? 'L' : 'M'}${point[0].toFixed(1)} ${point[1].toFixed(1)}`).join(' '); const areaPath = `${linePath} L720 240 L0 240Z`; document.getElementById('impact-line')?.setAttribute('d', linePath); document.getElementById('impact-area')?.setAttribute('d', areaPath); const end = linePoints[linePoints.length - 1]; document.getElementById('impact-line-end')?.setAttribute('cx', end[0]); document.getElementById('impact-line-end')?.setAttribute('cy', end[1]); }
+  const bars = [...document.querySelectorAll('#page-overview .bar-group')]; const trend = metrics.trend || []; const maxTrend = Math.max(...trend.map(point => Number(point.value) || 0), 1); bars.forEach((group, index) => { const point = trend[index]; if (!point) return; const value = Number(point.value) || 0; const valueNode = group.querySelector('.bar-value'); const bar = group.querySelector('.bar'); const label = group.querySelector('span:last-child'); if (valueNode) valueNode.textContent = value; if (bar) bar.style.height = `${Math.round(value / maxTrend * 100)}%`; if (label) label.textContent = point.label; });
+  const maxWeight = Math.max(...trend.map(point => Number(point.avoidedKg) || 0), 1); document.querySelectorAll('#page-impact .line-grid span').forEach((label, index) => { label.textContent = String(Number((maxWeight * (4 - index) / 4).toFixed(1))); }); const linePoints = trend.map((point, index) => [index * (720 / Math.max(trend.length - 1, 1)), 220 - ((Number(point.avoidedKg) || 0) / maxWeight) * 195]); if (linePoints.length > 1) { const linePath = linePoints.map((point, index) => `${index ? 'L' : 'M'}${point[0].toFixed(1)} ${point[1].toFixed(1)}`).join(' '); const areaPath = `${linePath} L720 240 L0 240Z`; document.getElementById('impact-line')?.setAttribute('d', linePath); document.getElementById('impact-area')?.setAttribute('d', areaPath); const end = linePoints[linePoints.length - 1]; document.getElementById('impact-line-end')?.setAttribute('cx', end[0]); document.getElementById('impact-line-end')?.setAttribute('cy', end[1]); }
   const mixKeys = ['furniture', 'books', 'electronics', 'other']; (metrics.mix || []).forEach((entry, index) => { setText(`mix-${mixKeys[index]}`, `${entry.percent}%`); }); const donut = document.getElementById('material-donut'); if (donut && metrics.mix?.length) { let cursor = 0; const colors = ['#7358f4', '#3bbba5', '#f0b24e', '#78a8ef']; donut.style.background = `conic-gradient(${metrics.mix.map((entry, index) => { const start = cursor; cursor += entry.percent; return `${colors[index]} ${start}% ${cursor}%`; }).join(', ')})`; }
   const locationList = document.getElementById('impact-locations'); if (locationList && metrics.locations?.length) { const maxLocation = Math.max(...metrics.locations.map(item => item.value), 1); locationList.innerHTML = metrics.locations.map((item, index) => `<div class="location-row"><span class="rank">${String(index + 1).padStart(2, '0')}</span><div class="location-name"><strong>${escapeHtml(item.location)}</strong><div class="location-bar"><i style="width:${Math.round(item.value / maxLocation * 100)}%"></i></div></div><strong>${item.value} kg</strong></div>`).join(''); }
-  const kpiBody = document.getElementById('kpi-target-body'); if (kpiBody) { kpiBody.innerHTML = (metrics.kpis || []).map(kpi => { const gap = Number(kpi.actual) - Number(kpi.target); return `<tr><td><strong>${escapeHtml(kpi.label)}</strong></td><td>${escapeHtml(kpi.target)} ${escapeHtml(kpi.unit)}</td><td>${escapeHtml(kpi.actual)} ${escapeHtml(kpi.unit)}</td><td class="${gap >= 0 ? 'kpi-positive' : 'kpi-negative'}">${gap >= 0 ? '+' : ''}${gap.toFixed(1)} ${escapeHtml(kpi.unit)}</td><td>${escapeHtml(kpi.label.includes('风险') ? '可持续管理员' : kpi.label.includes('工单') ? '设施运营' : '项目负责人')}</td></tr>`; }).join(''); }
+  const kpiBody = document.getElementById('kpi-target-body'); if (kpiBody) { kpiBody.innerHTML = (metrics.kpis || []).map(kpi => { const gap = Number(kpi.actual) - Number(kpi.target); const denominator = typeof kpi.denominator === 'number' ? `${kpi.numerator} / ${kpi.denominator}` : `${kpi.numerator || '—'} / ${kpi.denominator || '—'}`; return `<tr><td><strong>${escapeHtml(kpi.label)}</strong><small class="kpi-definition">${escapeHtml(kpi.definition || '')}</small><small class="kpi-definition">Basis: ${escapeHtml(denominator)} · Source: ${escapeHtml(kpi.source || 'Live records')} · Period: ${escapeHtml(kpi.period || 'Current')}</small></td><td>${escapeHtml(kpi.target)} ${escapeHtml(kpi.unit)}</td><td>${escapeHtml(kpi.actual)} ${escapeHtml(kpi.unit)}</td><td class="${gap >= 0 ? 'kpi-positive' : 'kpi-negative'}">${gap >= 0 ? '+' : ''}${gap.toFixed(1)} ${escapeHtml(kpi.unit)}</td><td>${escapeHtml(kpi.label.includes('risk') ? 'Sustainability admin' : kpi.label.includes('work-order') ? 'Facilities operations' : 'Project lead')}</td></tr>`; }).join(''); }
 }
 
 function studentAssigneeLabel(person) {
@@ -405,8 +520,17 @@ function renderStudentProgress() {
 function renderEvidence() {
   const list = document.getElementById('evidence-list');
   if (!list) return;
-  if (!state.evidence.length) { list.innerHTML = '<p class="empty-inline">尚未录入证据。请在取得受访者授权后添加访谈或观察记录。</p>'; return; }
-  list.innerHTML = state.evidence.slice(0, 6).map(entry => `<div class="evidence-row"><div><strong>${escapeHtml(entry.title)}</strong><small>${escapeHtml(entry.type)} · ${escapeHtml(entry.source)} · ${escapeHtml(entry.createdBy)}</small></div><span class="evidence-consent ${entry.consent ? 'confirmed' : 'pending'}">${entry.consent ? '已授权' : '待确认'}</span><p>${escapeHtml(entry.finding)}</p></div>`).join('');
+  if (!state.evidence.length) { list.innerHTML = '<p class="empty-inline">No evidence has been recorded yet.</p>'; return; }
+  list.innerHTML = state.evidence.slice(0, 6).map(entry => `<button type="button" class="evidence-row" data-evidence-id="${escapeHtml(entry.id)}"><div><strong>${escapeHtml(entry.title)}</strong><small>${escapeHtml(entry.type)} · ${escapeHtml(entry.source)}</small></div><span class="evidence-consent ${entry.consent ? 'confirmed' : 'pending'}">${entry.consent ? 'Consent confirmed' : 'Consent to verify'}</span><p>${escapeHtml(entry.finding)}</p><span class="evidence-open-link">Open transcript →</span></button>`).join('');
+}
+
+function openInterviewEvidenceModal(id) {
+  const entry = state.evidence.find(item => item.id === id);
+  if (!entry) return;
+  const questions = (entry.questions || []).map(question => `<article class="interview-question"><span class="interview-question-id">${escapeHtml(question.id)}</span><div><h3>${escapeHtml(question.question)}</h3>${Object.entries(question.answers || {}).map(([respondent, answer]) => `<p><strong>Respondent ${escapeHtml(respondent)}:</strong> ${escapeHtml(answer)}</p>`).join('')}</div></article>`).join('');
+  const findings = (entry.keyFindings || []).map(item => `<li>${escapeHtml(item)}</li>`).join('');
+  const implications = (entry.designImplications || []).map(item => `<li>${escapeHtml(item)}</li>`).join('');
+  openModal(`<div class="modal-head"><div><p class="panel-kicker">PRIMARY INTERVIEW EVIDENCE · ${escapeHtml(entry.id)}</p><h2>${escapeHtml(entry.title)}</h2><p>${escapeHtml(entry.respondentLabel || '')} · ${escapeHtml(entry.language || '')}</p></div><button class="close-modal" data-close-modal="true" aria-label="Close">×</button></div><div class="evidence-source-note"><strong>Source</strong><span>${escapeHtml(entry.source)}</span><span>Consent confirmed</span></div><div class="interview-summary"><h3>Cross-respondent synthesis</h3><p>${escapeHtml(entry.finding)}</p><div class="interview-columns"><div><h4>Key findings</h4><ul>${findings}</ul></div><div><h4>Design implications</h4><ul>${implications}</ul></div></div></div><div class="interview-transcript"><div class="panel-heading"><div><p class="panel-kicker">ENGLISH TRANSCRIPT</p><h3>Questions and answers</h3></div><span class="small-muted">12 questions · 3 respondents</span></div>${questions}</div><div class="modal-actions"><button class="button secondary" data-close-modal="true">Close</button></div>`);
 }
 
 function assigneeOptions(selected = '') {
@@ -604,7 +728,7 @@ function openWorkOrderModal() {
   const isStudent = state.user?.role === 'student';
   const assignmentField = isStudent ? '' : `<div class="form-field"><label for="order-person">负责人</label><select id="order-person" name="person">${assigneeOptions()}</select></div>`;
   openModal(`<div class="modal-head"><div><p class="panel-kicker">${isStudent ? 'FACILITY REPORT · API CREATE' : 'NEW WORK ORDER · API CREATE'}</p><h2>${isStudent ? '报告设施问题' : '新建设施工单'}</h2><p>${isStudent ? '提交后会进入设施运营的待分配队列。' : '新工单会进入“待处理”列，并写入后端数据文件。'}</p></div><button class="close-modal" data-close-modal="true" aria-label="关闭">×</button></div><form class="modal-form" id="work-order-form"><div class="form-field"><label for="order-title">${isStudent ? '问题标题' : '工单名称'}</label><input id="order-title" name="title" required placeholder="例如：North Residence B 回收点照明故障" /></div><div class="form-grid"><div class="form-field"><label for="order-area">地点</label><select id="order-area" name="area"><option>North Residence B</option><option>North Residence C</option><option>South Residence D</option><option>Library loading bay</option><option>Student Union</option></select></div><div class="form-field"><label for="order-type">类型</label><select id="order-type" name="type"><option>家具</option><option>电子</option><option>书籍</option><option>维修</option><option>清运</option></select></div></div><div class="form-grid"><div class="form-field"><label for="order-due">截止时间</label><input id="order-due" name="due" required placeholder="今天 16:30" /></div><div class="form-field"><label for="order-priority">优先级</label><select id="order-priority" name="priority"><option>高</option><option selected>中</option><option>低</option></select></div></div><div class="form-grid">${assignmentField}<div class="form-field"><label for="order-quantity">数量</label><input id="order-quantity" name="quantity" type="number" min="1" value="1" /></div></div><div class="form-field"><label for="order-description">${isStudent ? '问题描述' : '处理说明'}</label><textarea id="order-description" name="description" placeholder="填写现场情况、影响范围或安全要求"></textarea></div><div class="modal-actions"><button class="button secondary" type="button" data-close-modal="true">取消</button><button class="button primary" type="submit">${isStudent ? '提交问题' : '创建工单'} <span>→</span></button></div></form>`);
-  document.getElementById('work-order-form').addEventListener('submit', async event => { event.preventDefault(); if (!requireApi()) return; const body = Object.fromEntries(new FormData(event.currentTarget).entries()); try { const result = await apiRequest('/api/work-orders', { method: 'POST', body: JSON.stringify(body) }); if (result.queued) { state.workOrders.unshift({ ...body, id: `OFF-${Date.now()}`, status: 'new', person: body.person || (state.user?.role === 'student' ? 'UNASSIGNED' : 'LM'), priority: body.priority || '中' }); renderKanban(); } else await Promise.all([loadWorkOrders(), loadStudentProgress(), loadDashboard()]); closeModal(); showToast(result.queued ? '问题已加入离线队列' : state.user?.role === 'student' ? '问题已提交，设施运营可以看到并分配工单' : '工单已创建，已进入待处理队列'); } catch (error) { handleApiError(error); } });
+  document.getElementById('work-order-form').addEventListener('submit', async event => { event.preventDefault(); if (!requireApi()) return; const body = Object.fromEntries(new FormData(event.currentTarget).entries()); try { const result = await apiRequest('/api/work-orders', { method: 'POST', body: JSON.stringify(body) }); if (result.queued) { const offlineId = `OFF-${Date.now()}`; state.workOrders.unshift({ ...body, id: offlineId, status: 'new', person: body.person || (state.user?.role === 'student' ? 'UNASSIGNED' : 'LM'), priority: body.priority || '中' }); renderKanban(); } else { await Promise.all([loadWorkOrders(), loadStudentProgress(), loadDashboard()]); } closeModal(); const createdId = result.workOrder?.id || (result.queued ? 'assigned after sync' : 'created'); showToast(result.queued ? `Request queued offline · temporary reference ${createdId}` : state.user?.role === 'student' ? `Request ${createdId} submitted. Facilities operations can now assign it.` : `Work order ${createdId} created and added to the queue.`); } catch (error) { handleApiError(error); } });
 }
 
 function openOrderModal(id) {
@@ -710,16 +834,24 @@ function openAccessReview() {
 
 async function syncQueue() {
   if (!state.apiOnline) { showToast('后端未连接，无法同步', 'error'); return; }
-  if (state.offlineMode) { state.offlineMode = false; persistOfflineQueue(); }
+  if (!state.queuedRequests.length) { showToast('没有待同步的离线记录'); return; }
+  const wasOffline = state.offlineMode;
+  state.offlineMode = false;
+  persistOfflineQueue();
   try {
-    for (const queued of state.queuedRequests) await apiRequest(queued.path, queued.options);
-    state.queuedRequests = [];
-    persistOfflineQueue();
-    await apiRequest('/api/sync', { method: 'POST', body: JSON.stringify({ count: 3 }) });
+    const pending = [...state.queuedRequests]; let syncedCount = 0;
+    for (const queued of pending) { await apiRequest(queued.path, { ...queued.options, skipAuthRedirect: true }); state.queuedRequests.shift(); syncedCount += 1; persistOfflineQueue(); }
+    await apiRequest('/api/sync', { method: 'POST', body: JSON.stringify({ count: syncedCount }), skipAuthRedirect: true });
     await Promise.all([loadDashboard(), loadItems(), loadWorkOrders(), loadRisks(), loadAudit()]);
     setServerStatus('online', '后端已连接 · 模拟数据');
-    showToast('同步完成，离线记录已写入审计日志');
-  } catch (error) { state.offlineMode = true; persistOfflineQueue(); handleApiError(error); }
+    showToast('Sync complete. Offline records were written to the server.');
+  } catch (error) {
+    state.offlineMode = wasOffline;
+    persistOfflineQueue();
+    if (error.code === 'UNAUTHENTICATED') { showToast('Your session expired. Sign in again to sync the queue.', 'error'); showLogin(error.message); return; }
+    setServerStatus('offline', 'Sync unavailable · queue preserved');
+    showToast(`Sync failed; ${state.queuedRequests.length} record(s) remain queued.`, 'error');
+  }
 }
 
 function toggleOfflineMode() {
@@ -735,6 +867,7 @@ document.addEventListener('click', event => {
   const jump = event.target.closest('[data-page-jump]'); if (jump) { goToPage(jump.dataset.pageJump); return; }
   const action = event.target.closest('[data-action]');
   if (action) {
+    if (action.dataset.action === 'open-rewards') openRewards();
     if (action.dataset.action === 'open-add-item') openAddItemModal();
     if (action.dataset.action === 'open-work-order' && requireRole(['student','operator','admin'])) openWorkOrderModal();
     if (action.dataset.action === 'open-risk' && requireRole(['sustainability','admin'])) openRiskModal();
@@ -794,7 +927,7 @@ document.addEventListener('click', async event => { const review = event.target.
 document.addEventListener('click', async event => { const saveButton = event.target.closest('[data-save-user]'); if (!saveButton || saveButton.disabled) return; const row = saveButton.closest('[data-user-row]'); const username = row?.dataset.userRow; if (!username || !requireRole(['admin'])) return; const role = row.querySelector('[data-user-role]')?.value; const active = row.querySelector('[data-user-active]')?.checked; const reviewed = row.querySelector('[data-user-review]')?.checked; saveButton.disabled = true; try { const payload = await apiRequest(`/api/users/${encodeURIComponent(username)}`, { method: 'PATCH', body: JSON.stringify({ role, active, reviewed }) }); const index = state.users.findIndex(account => account.username === username); if (index >= 0) state.users[index] = payload.user; await Promise.all([loadAssignees(), loadDashboard(), loadAudit()]); renderUsers(); showToast(`${payload.user.displayName} 的账户目录状态已保存`); } catch (error) { handleApiError(error); saveButton.disabled = false; } });
 document.addEventListener('click', async event => { const saveButton = event.target.closest('[data-access-save]'); if (!saveButton) return; const row = saveButton.closest('[data-access-row]'); const username = row?.dataset.accessRow; if (!username || !requireRole(['admin'])) return; saveButton.disabled = true; try { const reviewed = row.querySelector('[data-access-reviewed]')?.checked; await apiRequest(`/api/users/${encodeURIComponent(username)}`, { method: 'PATCH', body: JSON.stringify({ reviewed }) }); await Promise.all([loadUsers(), loadDashboard(), loadAudit()]); closeModal(); openAccessReview(); showToast('权限复核状态已保存'); } catch (error) { handleApiError(error); saveButton.disabled = false; } });
 document.addEventListener('click', async event => { const refresh = event.target.closest('[data-access-refresh]'); if (!refresh) return; try { await loadUsers(); closeModal(); openAccessReview(); } catch (error) { handleApiError(error); } });
+document.addEventListener('click', event => { const evidence = event.target.closest('[data-evidence-id]'); if (evidence) openInterviewEvidenceModal(evidence.dataset.evidenceId); });
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && modalRoot.getAttribute('aria-hidden') === 'false') closeModal(); });
 
 bootstrap();
-

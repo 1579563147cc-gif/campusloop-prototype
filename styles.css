@@ -246,6 +246,11 @@ h2 { margin-bottom: 0; font-size: 16px; letter-spacing: -.025em; }
 .filter-chip { padding: 6px 9px; border-radius: 7px; color: #a1a2a9; background: transparent; font-size: 9px; }
 .filter-chip.active { color: var(--purple); background: var(--purple-soft); }
 .kanban { display: grid; grid-template-columns: repeat(4, 1fr); gap: 11px; }
+.board-panel { min-width: 0; }
+.kanban { grid-template-columns: repeat(4, minmax(170px, 1fr)); overflow-x: auto; padding-bottom: 10px; }
+.kanban-card { min-width: 0; text-align: left; }
+.kanban-card-top { flex-wrap: wrap; }
+.kanban-card strong, .kanban-card p, .kanban-card-foot { overflow-wrap: anywhere; }
 .kanban-column { min-width: 0; padding: 9px; border-radius: 11px; background: #f7f7f9; }
 .column-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; color: #777880; font-size: 10px; font-weight: 800; }
 .column-heading b { min-width: 17px; padding: 2px 5px; border-radius: 5px; color: #9798a0; background: #eaeaec; font-family: 'DM Mono', monospace; font-size: 8px; text-align: center; }
@@ -814,6 +819,26 @@ body::before {
 .kpi-table-wrap { overflow-x: auto; border: 1px solid rgba(92,82,155,.1); border-radius: 14px; }
 .kpi-table-wrap table { min-width: 680px; }
 .kpi-positive { color: #178a70; font-weight: 800; }.kpi-negative { color: #c15d69; font-weight: 800; }
+.kpi-definition { display: block; margin-top: 4px; color: #85869a; font-size: 9px; line-height: 1.45; font-weight: 500; }
+.evidence-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; text-align: left; cursor: pointer; border: 0; border-top: 1px solid var(--line); padding: 15px 0; color: inherit; background: transparent; }
+.evidence-row:first-child { border-top: 0; }.evidence-row:hover { background: linear-gradient(90deg, rgba(115,88,244,.06), transparent); }.evidence-row p { grid-column: 1 / -1; margin: 0; color: #626378; line-height: 1.55; }.evidence-open-link { justify-self: end; color: var(--purple); font-size: 10px; font-weight: 800; }
+.evidence-source-note { display: grid; gap: 5px; padding: 12px 14px; border: 1px solid rgba(115,88,244,.12); border-radius: 12px; background: rgba(245,243,255,.74); color: #676681; font-size: 11px; }
+.evidence-source-note strong { color: #413c70; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }.interview-summary { margin-top: 18px; padding: 16px; border-radius: 14px; background: #faf9ff; }.interview-summary h3, .interview-summary h4 { margin: 0 0 8px; color: #3f3a6e; }.interview-summary p { margin: 0; color: #5e6074; line-height: 1.55; }.interview-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-top: 14px; }.interview-columns ul { margin: 0; padding-left: 18px; color: #5e6074; font-size: 11px; line-height: 1.6; }.interview-transcript { margin-top: 20px; }.interview-question { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 12px; padding: 15px 0; border-top: 1px solid var(--line); }.interview-question-id { color: var(--purple); font-size: 11px; font-weight: 900; }.interview-question h3 { margin: 0 0 8px; color: #353451; font-size: 13px; line-height: 1.4; }.interview-question p { margin: 6px 0 0; color: #626378; font-size: 11px; line-height: 1.55; }.interview-question p strong { color: #4c477a; }
+@media (max-width: 760px) { .interview-columns { grid-template-columns: 1fr; } .evidence-row { grid-template-columns: 1fr; } .evidence-open-link { justify-self: start; } }
+
+/* English copy needs a little more breathing room than the original compact labels. */
+.page-heading, .panel-heading, .heading-with-actions { gap: 16px; flex-wrap: wrap; }
+.page-heading > div:first-child, .panel-heading > div:first-child { min-width: 0; }
+.page-heading h1, .panel-heading h2, .modal-head h2 { line-height: 1.15; overflow-wrap: anywhere; }
+.page-subtitle, .panel-heading p, .panel-heading small, .small-muted { line-height: 1.5; }
+.modal { width: min(980px, calc(100vw - 32px)); max-height: min(88vh, 920px); overflow-y: auto; overscroll-behavior: contain; }
+.modal-head { align-items: flex-start; gap: 18px; }.modal-head > div:first-child { min-width: 0; flex: 1; }.modal-head p { line-height: 1.45; overflow-wrap: anywhere; }
+.modal-form .form-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }.modal-form input, .modal-form select, .modal-form textarea { max-width: 100%; }
+.detail-list > div, .access-review-row, .risk-report-row, .review-center-row, .moderation-row { gap: 12px; min-width: 0; }.detail-list > div > span:last-child, .access-review-row > div:first-child, .risk-report-row > div:first-child, .review-center-row > div:first-child, .moderation-row > div:first-child { min-width: 0; overflow-wrap: anywhere; }
+.table-wrap th, .table-wrap td, .kpi-table-wrap th, .kpi-table-wrap td { vertical-align: top; line-height: 1.45; }.kpi-table-wrap table { min-width: 780px; }.kpi-definition { max-width: 340px; overflow-wrap: anywhere; }
+.interview-question h3, .interview-question p, .interview-summary p, .interview-columns li { overflow-wrap: anywhere; }.interview-question { align-items: start; }.interview-question-id { padding-top: 2px; }
+.evidence-source-note span, .evidence-row small, .evidence-row p { overflow-wrap: anywhere; }.evidence-row { min-width: 0; }
+@media (max-width: 760px) { .modal { width: min(calc(100vw - 20px), 680px); max-height: 92vh; }.modal-head { gap: 10px; }.kpi-table-wrap table { min-width: 680px; }.page-heading h1 { font-size: clamp(24px, 7vw, 34px); } }
 .implementation-lower-grid { display: grid; grid-template-columns: minmax(0,1.25fr) minmax(290px,.75fr); gap: 20px; margin-top: 20px; }
 .traceability-panel, .tco-panel { padding: 26px 27px; }
 .traceability-list { display: grid; gap: 8px; }
@@ -841,3 +866,9 @@ body::before {
 .resource-location-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 9px; color: #178a70; background: #d9f6ee; font-size: 15px; }
 .resource-location-card div { display: grid; gap: 2px; }.resource-location-card strong { color: #3c3e58; font-size: 10px; }.resource-location-card span, .resource-location-card small { color: #77798d; font-size: 9px; }.resource-location-card small { color: #178a70; }
 
+.demo-data-note { margin: 0 0 16px; padding: 10px 14px; border: 1px solid #ddd5ff; border-radius: 10px; background: #f5f2ff; color: #4c4279; font-size: 12px; line-height: 1.5; }
+.rewards-panel { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 24px; margin: 0 0 20px; padding: 24px; background: linear-gradient(125deg, #f8f6ff, #edf9f5); }
+.rewards-intro h2 { margin: 4px 0 8px; font-size: 20px; color: #25213d; }.rewards-intro p:not(.panel-kicker) { max-width: 440px; margin: 0 0 15px; line-height: 1.55; color: #67687b; font-size: 12px; }
+.rewards-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: stretch; }.rewards-stats > div { padding: 15px; border: 1px solid rgba(112, 91, 210, .12); border-radius: 14px; background: rgba(255,255,255,.75); }.rewards-stats span, .rewards-stats small { display: block; color: #6e6d81; font-size: 10px; line-height: 1.45; }.rewards-stats strong { display: block; margin: 7px 0; color: #4c36c0; font-size: 27px; line-height: 1.1; }.reward-track { height: 6px; margin-top: 10px; overflow: hidden; border-radius: 9px; background: #e8e5f7; }.reward-track i { display: block; width: 0; height: 100%; background: #7459e9; border-radius: inherit; }
+.reward-rules { padding: 16px; border-radius: 12px; background: #f6f4ff; color: #5f5e72; font-size: 12px; line-height: 1.6; }.reward-rules strong { color: #382b84; }.reward-rules p { margin: 8px 0 0; }.reward-history-heading { margin: 20px 0 8px; font-size: 14px; }.reward-entry { display: flex; justify-content: space-between; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); }.reward-entry strong, .reward-entry small { display: block; overflow-wrap: anywhere; }.reward-entry small { margin-top: 4px; color: #77788b; font-size: 10px; }.reward-entry b { color: #168972; white-space: nowrap; }
+@media (max-width: 760px) { .rewards-panel { grid-template-columns: 1fr; gap: 15px; padding: 18px; } .rewards-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

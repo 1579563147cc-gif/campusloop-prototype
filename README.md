@@ -1,6 +1,6 @@
-# CampusLoop 前后端交互原型
+# CampusLoop campus circularity operations prototype
 
-这是 BUS4093 RFP 投标方案的本地前后端交互原型。前端通过 Node API 读写 `data/store.json`，因此新增资源、工单、风险和状态更新会在刷新后保留。
+This is the local full-stack prototype for the BUS4093 RFP proposal. The interface is presented in English, while the Node API persists resources, work orders, risks, audit records and interview evidence in `data/store.json`.
 
 - 总览与循环量趋势；
 - 资源发布、搜索、分类筛选和预约领取；
@@ -17,9 +17,13 @@
 - 风险登记：`POST /api/risks`；
 - 风险状态与缓解措施更新：`PATCH /api/risks/:id`；
 - 研究证据录入：`GET/POST /api/evidence`；
+- 访谈证据：`GET /api/interviews` returns the permanently stored English translation of the supplied student interview record, including 12 questions, three anonymised respondents, source status and design implications;
 - 账户目录和权限修改：`GET /api/users`、`PATCH /api/users/:username`（仅系统管理员）；
 - 审计日志读取：`GET /api/audit`，前端支持 CSV 导出；
 - 离线队列同步：`POST /api/sync`。
+- Offline sync keeps queued records when a request fails and only redirects to sign-in for a confirmed expired session; permission or network failures do not silently discard the queue;
+- Student facilities requests receive a server-generated persistent ID such as `WO-2042`, which is reused in the student progress view, operator queue, notifications and audit log;
+- Risk levels are calculated from probability × impact: 1–4 Low, 5–9 Medium, 10–16 High, 17–25 Critical;
 - 角色切换：学生、设施运营、可持续管理员、系统管理员；
 - 登录与服务端角色权限：未登录返回 401，无权限操作返回 403；
 - 人工审核队列：设施运营和系统管理员可以审核待发布资源；
@@ -48,7 +52,11 @@ node server.js
 
 然后打开 `http://localhost:4173/`。
 
-页面中的数字、物品、工单和影响指标均为模拟数据，不能当作真实校园运营结果。
+The numbers, items, work orders and impact indicators are demonstration data and must not be presented as real campus operating results. The interview transcript is primary project evidence, and interview consent has been confirmed.
+
+The dashboard seeds five completed example resources with illustrative weights. The reuse rate is the count of completed reuse records divided by active, non-rejected resources in this demonstration dataset. The seven-day bars count completed resources by their completion date; the impact line totals their recorded example weights by day. The total weight includes only completed resources with a numeric weight, and is not evidence of actual waste or landfill diversion. These prototype measures illustrate the report's proposed pilot KPIs and require real cohort definitions, handover verification and weight evidence for production.
+
+Student rewards are a private demonstration: an eligible student posting or claiming a resource receives 10 points once the operator confirms completed reuse, with a 100-point UTC calendar-month cap. An item is counted once per student; demo items and activity completed before this feature are excluded. `/api/rewards/me` returns only the signed-in student's ledger and balance; non-student accounts are denied. Badges are display milestones, not redeemable benefits. The demo reset clears the reward ledger along with other demo data.
 
 如果直接打开本地 `index.html`，只要 `node server.js` 正在运行，页面也会自动把 API 请求发送到 `http://localhost:4173`。
 
@@ -66,4 +74,3 @@ node server.js
 ## GitHub 部署边界
 
 本仓库已经托管完整源码和模拟数据。GitHub 仓库或 GitHub Pages 可以托管静态文件，但不会运行 `server.js`，也不会持久化 `data/store.json` 的写入。因此，要在线保留这些交互，需要另外部署 Node 后端和持久化数据库；当前仓库适合作为课程演示源码和本地可运行版本。
-
